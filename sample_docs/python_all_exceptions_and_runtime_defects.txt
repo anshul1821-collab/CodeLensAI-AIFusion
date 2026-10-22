@@ -1,0 +1,181 @@
+================================================================================
+PYTHON OFFICIAL DOCUMENTATION & COMPREHENSIVE ERROR REFERENCE:
+ALL BUILT-IN EXCEPTIONS, SYNTAX DEFECTS, AND RUNTIME ERRORS
+================================================================================
+
+1. SYNTAX ERRORS (SYNTAXERROR & INDENTATIONERROR)
+------------------------------------------------
+SyntaxError is raised when the Python parser encounters a statement that does not conform to the formal grammar of Python.
+
+Common Subtypes and Causes:
+A. Missing Colons:
+   Compound statements (def, if, elif, else, for, while, class, try, except, finally, with) require a colon (:) at the end of the header line.
+   Example:
+       def greet(name)       # SyntaxError: expected ':'
+           print("Hello", name)
+   Correction:
+       def greet(name):
+           print("Hello", name)
+
+B. Unterminated String Literals:
+   Strings started with single (') or double (") quotes must be closed before the end of line (EOL) unless triple quotes (''' or """) are used.
+   Example:
+       print("titesh)       # SyntaxError: unterminated string literal
+   Correction:
+       print("titesh")
+
+C. Unmatched or Missing Parentheses, Brackets, and Braces:
+   Every opening delimiter `(`, `[`, `{` must be matched with its corresponding closing delimiter.
+   Example:
+       data = [1, 2, 3       # SyntaxError: '[' was never closed
+   Correction:
+       data = [1, 2, 3]
+
+D. IndentationError:
+   Python uses whitespace indentation to delimit code blocks. Inconsistent use of tabs and spaces, or missing indentation after a colon, raises IndentationError.
+
+
+2. NAMEERROR: UNDEFINED VARIABLES & TYPO DETECTION
+--------------------------------------------------
+Raised when a local or global identifier name is not found in the current namespace (LEGB rule: Local, Enclosing, Global, Built-in).
+
+Common Causes:
+- Misspelled variable or function names:
+  Example:
+      price = 100
+      quantity = 3
+      return price * quntity  # NameError: name 'quntity' is not defined
+  Remedy:
+      Use correct identifier `quantity`. Check naming with close matches.
+
+- Using a variable before assignment:
+  Example:
+      print(score)
+      score = 95
+  Remedy:
+      Always initialize variables prior to reading their values.
+
+- UnboundLocalError:
+  Raised when reference is made to any local variable in a function or method, but no value has been bound to that variable. Often occurs when modifying a global variable without the `global` declaration.
+
+
+3. TYPEERROR: INVALID DATA TYPE OPERATIONS
+------------------------------------------
+Raised when an operation or function is applied to an object of inappropriate type.
+
+Common Causes:
+- Implicit string and number concatenation:
+  Python does NOT automatically coerce integers or floats to strings during string concatenation.
+  Example:
+      age = 20
+      message = "Age: " + age    # TypeError: can only concatenate str (not "int") to str
+  Correction:
+      message = f"Age: {age}"     # Preferred modern f-string
+      message = "Age: " + str(age)
+
+- Calling non-callable objects:
+  Example:
+      count = 5
+      count()                    # TypeError: 'int' object is not callable
+
+- Incorrect argument count or unexpected keyword argument:
+  Example:
+      def add(x, y): return x + y
+      add(10)                    # TypeError: add() missing 1 required positional argument: 'y'
+
+
+4. VALUEERROR: INAPPROPRIATE VALUE FOR VALID TYPE
+------------------------------------------------
+Raised when an operation or function receives an argument that has the right type but an inappropriate value.
+
+Common Causes:
+- Converting non-numeric string to integer or float:
+  Example:
+      number = int("hello")      # ValueError: invalid literal for int() with base 10: 'hello'
+  Remedy:
+      Validate string format before converting, or wrap in try/except ValueError:
+      try:
+          number = int(user_input)
+      except ValueError:
+          number = 0
+
+- Unpacking mismatch:
+  Example:
+      a, b = [1, 2, 3]           # ValueError: too many values to unpack (expected 2)
+
+
+5. INDEXERROR: SEQUENCE SUBSCRIPT OUT OF BOUNDS
+-----------------------------------------------
+Raised when a sequence subscript is out of range. Valid indices for sequence `seq` of length `N` are `0` through `N - 1`. Negative indices run `-1` through `-N`.
+
+Common Cause: Off-by-one errors in loops:
+  Example:
+      numbers = [10, 20, 30]
+      for i in range(len(numbers) + 1):  # i reaches 3; max index is 2!
+          print(numbers[i])             # IndexError: list index out of range
+  Correction:
+      for i in range(len(numbers)):
+          print(numbers[i])
+      # Or better:
+      for num in numbers:
+          print(num)
+
+
+6. KEYERROR: MISSING DICTIONARY KEYS
+------------------------------------
+Raised when a dictionary key is not found in the set of existing keys.
+
+Example:
+    student = {"name": "Aarav", "age": 20}
+    grade = student["grade"]    # KeyError: 'grade'
+Correction:
+    # Safe retrieval with fallback default value:
+    grade = student.get("grade", "N/A")
+
+
+7. ATTRIBUTEERROR: INVALID ATTRIBUTE OR METHOD
+----------------------------------------------
+Raised when an attribute reference or assignment fails.
+
+Example:
+    text = "hello"
+    text.append("!")            # AttributeError: 'str' object has no attribute 'append'
+Explanation:
+    Python strings are immutable primitives and do not possess an `.append()` method.
+Correction:
+    text = text + "!"           # String concatenation
+
+
+8. ZERODIVISIONERROR
+--------------------
+Raised when the second argument of a division (/) or modulo (%) operation is zero.
+Example:
+    def divide(a, b): return a / b
+    divide(10, 0)               # ZeroDivisionError: division by zero
+Correction:
+    Add guard:
+    if b == 0:
+        return 0.0
+
+
+9. MODULENOTFOUNDERROR & IMPORTERROR
+-----------------------------------
+Raised when an import statement fails to find the module definition or when a `from ... import` fails to find a name.
+Example:
+    import module_that_does_not_exist   # ModuleNotFoundError
+Rule:
+    Never auto-install untrusted packages. Verify virtual environment activation and package names in requirements.txt.
+
+
+10. RECURSIONERROR: MAXIMUM RECURSION DEPTH EXCEEDED
+----------------------------------------------------
+Raised when interpreter detects that the maximum recursion depth (typically 1000) is exceeded.
+Common Cause: Missing or incorrect base case in a recursive function.
+Example:
+    def factorial(n):
+        return n * factorial(n - 1)  # No base case when n == 0 or n == 1!
+Correction:
+    def factorial(n):
+        if n <= 1:
+            return 1
+        return n * factorial(n - 1)

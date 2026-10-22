@@ -1,0 +1,104 @@
+================================================================================
+JAVA OFFICIAL DOCUMENTATION & REFERENCE GUIDE:
+COMMON EXCEPTIONS, CONCURRENCY HAZARDS, AND MEMORY MANAGEMENT
+================================================================================
+
+1. NULLPOINTEREXCEPTION (NPE)
+-----------------------------
+NullPointerException is thrown when an application attempts to use `null` in a case where an object instance is required.
+
+Common Triggers:
+- Calling an instance method on a null reference:
+      String name = null;
+      int len = name.length(); // Throws java.lang.NullPointerException
+- Accessing or modifying a field of a null reference.
+- Taking the length of null as if it were an array (`null.length`).
+- Unboxing a null wrapper type (e.g. assigning `null` `Integer` to primitive `int`).
+
+Modern Java Prevention:
+A. Defensive Null Checks:
+       if (name != null) { ... }
+       Objects.requireNonNull(name, "Name must not be null");
+B. Using `java.util.Optional<T>`:
+       Optional<String> optName = Optional.ofNullable(name);
+       String displayName = optName.orElse("Guest");
+
+
+2. STRING EQUALITY: `==` VS `.EQUALS()`
+---------------------------------------
+In Java, the `==` operator compares object reference addresses (identity in memory), NOT the actual string content!
+
+Buggy Pattern:
+    String input = new String("admin");
+    if (input == "admin") { // Evaluates to FALSE! Different heap references!
+        grantAccess();
+    }
+
+Official Java Remedy:
+Always use `.equals()` or `.equalsIgnoreCase()` to compare String contents:
+    if ("admin".equals(input)) { // Preferred Yoda condition prevents NPE if input is null
+        grantAccess();
+    }
+
+
+3. ARRAYINDEXOUTOFBOUNDSEXCEPTION & STRINGINDEXOUTOFBOUNDSEXCEPTION
+-------------------------------------------------------------------
+Thrown to indicate that an array or string has been accessed with an illegal index. The index is either negative or greater than or equal to the size of the array/string.
+
+Example:
+    int[] scores = {90, 85, 95}; // length is 3 (indices 0, 1, 2)
+    int last = scores[3]; // Throws ArrayIndexOutOfBoundsException: Index 3 out of bounds for length 3
+
+Remedy:
+    Use enhanced for loop (for-each) or verify loop termination:
+    for (int score : scores) { ... }
+
+
+4. CONCURRENTMODIFICATIONEXCEPTION
+----------------------------------
+Thrown when an object is detected to have been modified concurrently while being iterated over, in violation of the contract of the iterator.
+
+Buggy Pattern:
+    List<String> items = new ArrayList<>(List.of("apple", "remove_me", "banana"));
+    for (String item : items) {
+        if ("remove_me".equals(item)) {
+            items.remove(item); // Throws ConcurrentModificationException!
+        }
+    }
+
+Remedy:
+A. Use modern `Collection.removeIf()`:
+       items.removeIf(item -> "remove_me".equals(item));
+B. Use explicit Iterator:
+       Iterator<String> it = items.iterator();
+       while (it.hasNext()) {
+           if ("remove_me".equals(it.next())) {
+               it.remove(); // Safe removal
+           }
+       }
+
+
+5. CLASSCASTEXCEPTION & GENERICS TYPE SAFETY
+--------------------------------------------
+Thrown to indicate that the code has attempted to cast an object to a subclass of which it is not an instance.
+Example:
+    Object obj = Integer.valueOf(42);
+    String str = (String) obj; // Throws ClassCastException: Integer cannot be cast to String
+Remedy:
+    Check type using `instanceof` before casting (or use Pattern Matching for `instanceof` in Java 16+):
+    if (obj instanceof String s) {
+        System.out.println(s.toUpperCase());
+    }
+
+
+6. RESOURCE MANAGEMENT: TRY-WITH-RESOURCES
+------------------------------------------
+Failing to close I/O streams, database connections, or socket handles leads to file descriptor leaks and connection pool starvation.
+
+Modern Java Pattern (`AutoCloseable`):
+    try (BufferedReader reader = new BufferedReader(new FileReader("data.txt"))) {
+        String line = reader.readLine();
+        // reader is automatically closed when block exits, even on exception!
+    } catch (IOException e) {
+        logger.error("Failed to read file", e);
+    }

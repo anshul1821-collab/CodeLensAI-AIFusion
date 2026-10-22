@@ -1,0 +1,55 @@
+================================================================================
+SQL & RELATIONAL DATABASE OFFICIAL REFERENCE:
+COMMON DATABASE ERRORS, QUERY DEFECTS, AND SECURITY MITIGATION
+================================================================================
+
+1. SQL INJECTION (SQLi) & PARAMETERIZED QUERIES
+-----------------------------------------------
+SQL Injection occurs when untrusted user input is directly concatenated or formatted into a dynamic SQL string without sanitization.
+
+Vulnerable Pattern:
+    user_id = request.GET.get('id')
+    query = "SELECT * FROM accounts WHERE id = " + user_id
+    # If attacker passes "1 OR 1=1", all account rows are exposed!
+
+Industry Standard Mitigation:
+Use parameterized queries (prepared statements). The database engine compiles the SQL query structure separately from user data parameters, rendering injection structurally impossible:
+    cursor.execute("SELECT * FROM accounts WHERE id = %s", [user_id])
+
+
+2. CONSTRAINT VIOLATIONS IN RELATIONAL DATABASES
+------------------------------------------------
+A. Foreign Key Constraint Failure (PostgreSQL Error 23503):
+   Raised when attempting to insert or update a row with a foreign key value that does not exist in the referenced parent table, or when attempting to delete a parent row that still has child rows.
+   Remedy: Ensure parent records exist before inserting children; configure `ON DELETE CASCADE` or `ON DELETE SET NULL` when appropriate.
+
+B. Unique Constraint Violation (PostgreSQL Error 23505):
+   Raised when attempting to insert a duplicate value into a column or composite group marked `UNIQUE` or `PRIMARY KEY`.
+   Remedy: Use `INSERT ... ON CONFLICT (col) DO UPDATE` (Upsert) or check existence beforehand.
+
+C. Not-Null Constraint Violation (PostgreSQL Error 23502):
+   Raised when attempting to insert a `NULL` value into a column defined with `NOT NULL`.
+
+
+3. TRANSACTION DEADLOCKS & CONCURRENCY
+--------------------------------------
+A Deadlock occurs when two or more database transactions mutually block each other, each holding a lock on a resource that the other requires.
+
+Deadlock Prevention Best Practices:
+1. Consistent Lock Order: Ensure all transactions acquire locks on tables and rows in the exact same sequential order.
+2. Keep Transactions Short: Perform heavy computational logic before opening a database transaction; commit or rollback immediately upon completing writes.
+3. Use Row-Level Locks (`SELECT ... FOR UPDATE`) carefully with appropriate timeouts.
+
+
+4. THE N+1 QUERY PERFORMANCE PROBLEM
+------------------------------------
+Occurs when an application loads a collection of parent records and then issues an additional query for each individual parent to retrieve its child relationships.
+
+Example in Django ORM:
+    documents = Document.objects.all() # 1 query for 100 documents
+    for doc in documents:
+        print(doc.chunks.count())      # 100 individual queries! Total: 101 queries!
+
+Remedy:
+Use eager loading with `select_related` (for Foreign Key single relations) or `prefetch_related` (for reverse foreign keys and Many-to-Many relations):
+    documents = Document.objects.prefetch_related('chunks').all() # Just 2 queries!

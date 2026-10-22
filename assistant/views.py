@@ -244,6 +244,7 @@ def api_get_status(request):
     })
 
 
+@csrf_exempt
 @require_http_methods(["POST"])
 def api_search_preview(request):
     """

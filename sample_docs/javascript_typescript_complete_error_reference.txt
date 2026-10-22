@@ -1,0 +1,107 @@
+================================================================================
+JAVASCRIPT & TYPESCRIPT OFFICIAL REFERENCE & ERROR CATALOG:
+COMMON RUNTIME ERRORS, ASYNC PITFALLS, AND SCOPING TRAPS
+================================================================================
+
+1. TYPEERROR: CANNOT READ PROPERTIES OF UNDEFINED OR NULL
+---------------------------------------------------------
+The most common runtime exception in JavaScript applications.
+Occurs when attempting to access a property or method on a variable whose value is `undefined` or `null`.
+
+Example:
+    const user = null;
+    console.log(user.profile.name);
+    // Uncaught TypeError: Cannot read properties of null (reading 'profile')
+
+Defensive Programming Remedies:
+A. Modern Optional Chaining (`?.`):
+   Short-circuits evaluation and returns `undefined` instead of throwing an error:
+       const name = user?.profile?.name ?? "Anonymous";
+
+B. Nullish Coalescing Operator (`??`):
+   Provides a fallback default only when the left-hand side is `null` or `undefined` (unlike `||` which also falls back on `0`, `""`, or `false`):
+       const count = userOptions.limit ?? 10;
+
+
+2. TYPEERROR: "X IS NOT A FUNCTION"
+-----------------------------------
+Raised when code attempts to invoke an identifier as a function, but its runtime value is of another type.
+
+Common Causes:
+A. Calling array methods on non-array objects:
+   Example:
+       const elements = document.querySelectorAll(".item"); // NodeList, not Array
+       elements.map(el => el.textContent); // TypeError in older browsers
+   Correction:
+       Array.from(elements).map(el => el.textContent);
+
+B. Overriding a function identifier with a variable assignment:
+   Example:
+       let calculate = () => 42;
+       calculate = 100;
+       calculate(); // TypeError: calculate is not a function
+
+
+3. REFERENCEERROR: "X IS NOT DEFINED" & TEMPORAL DEAD ZONE
+----------------------------------------------------------
+Raised when code attempts to access a variable that has not been declared anywhere in the current scope chain.
+
+A. Undeclared Identifier:
+   Example:
+       console.log(totalAmount); // ReferenceError: totalAmount is not defined
+
+B. Temporal Dead Zone (TDZ) with `let` and `const`:
+   Variables declared with `let` and `const` are hoisted to the top of the block, but are not initialized. Accessing them before their declaration line throws ReferenceError:
+   Example:
+       console.log(count); // ReferenceError: Cannot access 'count' before initialization
+       let count = 5;
+
+
+4. ASYNCHRONOUS JAVASCRIPT & PROMISE PITFALLS
+--------------------------------------------
+A. Forgetting `await` on Async Functions:
+   Calling an async function without `await` returns a pending Promise instead of the resolved value:
+   Example:
+       async function getAuthToken() { return "secret_token_123"; }
+       const token = getAuthToken();
+       console.log("Bearer " + token); // Prints "Bearer [object Promise]"!
+   Correction:
+       const token = await getAuthToken();
+
+B. Unhandled Promise Rejections:
+   When an error occurs inside a Promise chain and no `.catch()` handler is attached, modern Node.js and browser environments emit an `UnhandledPromiseRejection` or terminate the process.
+   Remedy: Always use `try...catch` with `async/await` or attach `.catch(err => ...)` to Promises.
+
+C. `forEach` with Async Functions:
+   `Array.prototype.forEach` does not await promises returned by its callback!
+   Vulnerable:
+       users.forEach(async (u) => { await saveToDb(u); }); // Completes immediately before saves finish!
+   Correction:
+       await Promise.all(users.map(u => saveToDb(u)));
+       // Or sequential loop:
+       for (const u of users) { await saveToDb(u); }
+
+
+5. `THIS` CONTEXT BINDING & ARROW FUNCTIONS
+-------------------------------------------
+Traditional function declarations (`function() {}`) bind their own `this` dynamically based on how they are invoked.
+When passed as callbacks (e.g. `setTimeout`, event listeners), `this` reverts to `window` or `undefined` (in strict mode).
+
+Remedies:
+1. Use Arrow Functions: Arrow functions inherit `this` lexically from their enclosing scope:
+       class Timer {
+           constructor() {
+               this.seconds = 0;
+               setInterval(() => { this.seconds++; }, 1000);
+           }
+       }
+2. Explicit Binding: Use `.bind(this)`.
+
+
+6. RANGEERROR: MAXIMUM CALL STACK SIZE EXCEEDED
+-----------------------------------------------
+Raised when a function calls itself recursively without a terminating base condition, exhausting the JavaScript call stack.
+Example:
+    function recurse() { recurse(); }
+    recurse(); // RangeError: Maximum call stack size exceeded
+Remedy: Ensure recursive base conditions are reached and test with base case inputs.

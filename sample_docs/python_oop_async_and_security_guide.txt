@@ -1,0 +1,121 @@
+================================================================================
+PYTHON OFFICIAL DOCUMENTATION & REFERENCE:
+OBJECT-ORIENTED PROGRAMMING, ASYNC, CONCURRENCY & SECURITY BEST PRACTICES
+================================================================================
+
+1. OBJECT-ORIENTED PROGRAMMING (OOP) COMMON PITFALLS
+----------------------------------------------------
+A. Missing `self` Parameter in Instance Methods:
+   In Python, every instance method must explicitly declare `self` as its first parameter.
+   Failing to declare `self` leads to a TypeError when called on an instance:
+   Example:
+       class Calculator:
+           def add(a, b):     # Missing self!
+               return a + b
+       calc = Calculator()
+       calc.add(2, 3)         # TypeError: add() takes 2 positional arguments but 3 were given
+   Correction:
+       class Calculator:
+           def add(self, a, b):
+               return a + b
+
+B. Mutable Class Attributes vs Instance Attributes:
+   Attributes defined directly on the class body are shared across all instances of that class.
+   Example:
+       class Dog:
+           tricks = []        # Shared by all dogs!
+       d1 = Dog()
+       d2 = Dog()
+       d1.tricks.append("roll")
+       print(d2.tricks)       # Prints ["roll"]!
+   Correction:
+       class Dog:
+           def __init__(self):
+               self.tricks = []  # Unique to each instance
+
+C. Forgetting `super().__init__()` in Derived Classes:
+   When inheriting from a base class and overriding `__init__`, the derived class must call `super().__init__(...)` to ensure base class state is properly initialized.
+
+
+2. MUTABLE DEFAULT ARGUMENTS IN FUNCTIONS
+-----------------------------------------
+Python's default arguments are evaluated ONCE when the function definition is executed, NOT each time the function is called.
+Using a mutable object (list, dict, set) as a default parameter causes unexpected state accumulation across function invocations.
+
+Buggy Pattern:
+    def add_item(item, target_list=[]):
+        target_list.append(item)
+        return target_list
+
+    print(add_item(1))   # Returns [1]
+    print(add_item(2))   # Returns [1, 2] -- Unexpected shared reference!
+
+Official Python Remedy:
+Use `None` as the sentinel default value, and instantiate the collection inside the function body:
+    def add_item(item, target_list=None):
+        if target_list is None:
+            target_list = []
+        target_list.append(item)
+        return target_list
+
+
+3. ASYNCIO AND ASYNCHRONOUS COROUTINES
+--------------------------------------
+A. Missing `await` Keyword:
+   Calling an async coroutine without `await` does not execute its body; it merely creates a coroutine object.
+   Example:
+       async def fetch_user():
+           return {"name": "Bob"}
+
+       async def main():
+           user = fetch_user()  # RuntimeWarning: coroutine 'fetch_user' was never awaited!
+           print(user)          # Prints <coroutine object fetch_user at ...>
+   Correction:
+       async def main():
+           user = await fetch_user()
+           print(user)
+
+B. Blocking the Event Loop:
+   Executing synchronous I/O operations (like `time.sleep()`, synchronous database queries, or blocking HTTP requests) inside an async function freezes the entire event loop.
+   Use non-blocking alternatives: `await asyncio.sleep(...)`, `httpx.AsyncClient`, etc.
+
+
+4. SECURITY AND RELIABILITY DEFECTS
+-----------------------------------
+A. SQL Injection Vulnerabilities:
+   Formatting or concatenating user-supplied strings directly into raw SQL queries allows attackers to execute arbitrary database commands.
+   Vulnerable:
+       query = f"SELECT * FROM users WHERE username = '{user_input}'"
+       cursor.execute(query)
+   Secure Parameterized Query:
+       cursor.execute("SELECT * FROM users WHERE username = %s", [user_input])
+
+B. Unsafe Execution Primitives (`eval()` and `exec()`):
+   Executing untrusted strings using `eval()` or `exec()` grants arbitrary code execution privileges.
+   Remedy: Never pass user input to `eval()`. Use `ast.literal_eval()` for safely parsing JSON-like literals.
+
+C. Resource Leaks (Unclosed File and Network Handles):
+   Opening files without a context manager leaves file handles open indefinitely if an exception occurs before `.close()`.
+   Vulnerable:
+       f = open("data.txt", "r")
+       content = f.read()
+       # If error occurs here, file handle leaks!
+       f.close()
+   Secure:
+       with open("data.txt", "r", encoding="utf-8") as f:
+           content = f.read()
+
+
+5. LOGIC AND BOUNDARY ERRORS
+----------------------------
+A. Comparison Boundary Conditions:
+   Example:
+       def is_adult(age):
+           return age > 18  # If legal age includes 18, age 18 returns False!
+   Correction:
+       def is_adult(age):
+           return age >= 18
+
+B. Floating Point Precision Pitfalls:
+   Due to IEEE 754 binary representation, `0.1 + 0.2 != 0.3` (`0.30000000000000004`).
+   Never use `==` for floating point comparisons. Use `math.isclose(a, b, rel_tol=1e-9)` or `decimal.Decimal`.

@@ -1,0 +1,86 @@
+================================================================================
+C & C++ OFFICIAL DOCUMENTATION & REFERENCE:
+MEMORY MANAGEMENT, POINTER SAFETY, AND UNDEFINED BEHAVIOR
+================================================================================
+
+1. SEGMENTATION FAULT (SIGSEGV) & INVALID MEMORY ACCESS
+-------------------------------------------------------
+A Segmentation Fault occurs when a program attempts to access a memory location that it is not permitted to access, or attempts to write to a read-only area.
+
+Common Root Causes:
+A. Dereferencing Null Pointers:
+   Example:
+       int* ptr = nullptr;
+       *ptr = 42; // Crash: SIGSEGV (Null Pointer Dereference)
+   Prevention: Always check pointer validity prior to dereference:
+       if (ptr != nullptr) { *ptr = 42; }
+
+B. Dangling Pointers & Use-After-Free:
+   A pointer pointing to deallocated memory:
+   Example:
+       int* ptr = new int(100);
+       delete ptr;
+       std::cout << *ptr; // Undefined Behavior / Crash: reading freed memory!
+   Remedy: Set pointer to `nullptr` immediately after `delete`:
+       delete ptr;
+       ptr = nullptr;
+
+C. Returning Address of Local Stack Variable:
+   Local variables reside on the call stack and are destroyed immediately when the function scope returns.
+   Fatal Bug:
+       int* getLocalAddress() {
+           int value = 42;
+           return &value; // WARNING/BUG: returning address of local temporary!
+       }
+   Remedy:
+       Return by value (copy/move):
+       int getValue() { return 42; }
+       Or allocate heap memory using `std::unique_ptr<int>`.
+
+
+2. MODERN C++ MEMORY SAFETY: SMART POINTERS & RAII
+--------------------------------------------------
+Resource Acquisition Is Initialization (RAII) ensures that resources (memory, file descriptors, mutex locks) are bound to object lifetimes and released deterministically upon scope exit.
+
+A. `std::unique_ptr<T>` (Exclusive Ownership):
+   Zero runtime overhead compared to raw pointers. Automatically deallocates heap memory when the unique_ptr goes out of scope. Cannot be copied, only moved.
+   Example:
+       auto ptr = std::make_unique<int>(100);
+       // Memory freed automatically; no need for `delete`!
+
+B. `std::shared_ptr<T>` (Shared Reference-Counted Ownership):
+   Maintains a control block with a reference count. The managed object is destroyed when the last shared_ptr pointing to it is destroyed.
+
+C. `std::weak_ptr<T>` (Non-Owning Observer):
+   Breaks circular reference cycles between `std::shared_ptr` instances that would otherwise cause memory leaks.
+
+
+3. BUFFER OVERFLOW & OUT-OF-BOUNDS ARRAY ACCESS
+-----------------------------------------------
+In C and C++, native C-style arrays (`int arr[5]`) do NOT perform bounds checking at runtime.
+Accessing `arr[5]` reads or writes into adjacent stack or heap memory, causing data corruption, stack smashing, or security exploits.
+
+Remedy:
+Use `std::vector<T>` or `std::array<T, N>` with the `.at()` member function, which performs bounds checking and throws `std::out_of_range`:
+    std::vector<int> nums = {10, 20, 30};
+    try {
+        int val = nums.at(5); // Throws std::out_of_range
+    } catch (const std::out_of_range& e) {
+        std::cerr << "Index error: " << e.what() << "\n";
+    }
+
+
+4. UNDEFINED BEHAVIOR (UB) IN C AND C++
+---------------------------------------
+Undefined Behavior means the C++ standard imposes no requirements on execution; the program may crash, produce garbage output, or appear to work temporarily.
+
+Common Triggers:
+- Reading uninitialized local variables:
+      int x;
+      int y = x + 1; // UB: x contains indeterminate memory garbage!
+- Integer signed overflow:
+      int max_val = INT_MAX;
+      max_val = max_val + 1; // UB in C++!
+- Modifying a string literal:
+      char* str = "hello";
+      str[0] = 'H'; // Bus error / SIGSEGV (string literals are read-only).
