@@ -148,30 +148,18 @@ class GoogleGeminiEmbedder(BaseEmbedder):
         headers = {"Content-Type": "application/json"}
 
         try:
-            resp = requests.post(url, headers=headers, json=payload, timeout=12)
-            if resp.status_code != 200:
-                # Try fallback model: models/gemini-embedding-2
-                fallback_url = f"{FALLBACK_EMBED_URL}?key={self.api_key}"
-                fallback_payload = {
-                    "model": "models/gemini-embedding-2",
-                    "content": {"parts": [{"text": text[:2000]}]},
-                    "outputDimensionality": 768
-                }
-                resp = requests.post(fallback_url, headers=headers, json=fallback_payload, timeout=12)
-
+            resp = requests.post(url, headers=headers, json=payload, timeout=3.5)
             if resp.status_code == 200:
                 result = resp.json()
                 embedding_vals = result.get("embedding", {}).get("values", [])
                 if embedding_vals:
                     return l2_normalize(embedding_vals)
 
-            # If Gemini returned non-200, gracefully fall back to local semantic vector
-            print(f"[CodeLens Warning] Gemini embedding returned status {resp.status_code}. Falling back to LocalSemanticEmbedder.")
+            # If Gemini returned non-200 (e.g. 429 quota or 404), immediately fall back
             return LocalSemanticEmbedder().embed_text(text)
 
-        except Exception as e:
-            # Fall back to offline deterministic semantic vector
-            print(f"[CodeLens Warning] Gemini embedding network error: {e}. Falling back to LocalSemanticEmbedder.")
+        except Exception:
+            # Fall back to offline deterministic semantic vector immediately
             return LocalSemanticEmbedder().embed_text(text)
 
     def embed_batch(self, texts: List[str]) -> List[List[float]]:
