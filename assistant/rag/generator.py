@@ -6,14 +6,19 @@ from typing import Dict, List, Any, Optional
 import requests
 from assistant.models import SystemSetting
 
-GEMINI_GENERATE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-FALLBACK_GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+GEMINI_MODELS = [
+    "gemini-3.8-flash",
+    "gemini-flash-latest",
+    "gemini-3.5-flash",
+    "gemini-2.5-flash",
+]
 
 GROUNDING_LIMITATION_MESSAGE = (
     "I couldn't find sufficiently relevant information in your current knowledge base. "
     "Upload appropriate programming documentation or add a relevant reference before "
     "requesting a documentation-grounded explanation."
 )
+
 
 
 def get_gemini_api_key() -> str:
@@ -152,7 +157,6 @@ Please respond in this exact JSON schema:
   "corrected_code": "The complete, corrected code snippet preserving original intent."
 }}
 """
-        url = f"{GEMINI_GENERATE_URL}?key={self.api_key}"
         payload = {
             "contents": [
                 {"role": "user", "parts": [{"text": prompt}]}
@@ -166,28 +170,33 @@ Please respond in this exact JSON schema:
             }
         }
 
-        resp = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=20)
-        if resp.status_code != 200:
-            # Try fallback endpoint
-            url = f"{FALLBACK_GEMINI_URL}?key={self.api_key}"
-            resp = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=20)
-            if resp.status_code != 200:
-                raise RuntimeError(f"Gemini API returned status {resp.status_code}: {resp.text}")
+        last_error = ""
+        for model in GEMINI_MODELS:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
+            try:
+                resp = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=12)
+                if resp.status_code == 200:
+                    res_json = resp.json()
+                    candidates = res_json.get("candidates", [])
+                    if not candidates:
+                        continue
+                    raw_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    raw_text = raw_text.strip()
+                    if raw_text.startswith("```json"):
+                        raw_text = raw_text[7:]
+                    if raw_text.startswith("```"):
+                        raw_text = raw_text[3:]
+                    if raw_text.endswith("```"):
+                        raw_text = raw_text[:-3]
+                    return json.loads(raw_text.strip())
+                else:
+                    last_error = f"{model}: {resp.status_code} ({resp.text[:120]})"
+            except Exception as e:
+                last_error = f"{model}: {e}"
+                continue
 
-        res_json = resp.json()
-        raw_text = res_json.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-        
-        # Clean potential markdown wrapping
-        raw_text = raw_text.strip()
-        if raw_text.startswith("```json"):
-            raw_text = raw_text[7:]
-        if raw_text.startswith("```"):
-            raw_text = raw_text[3:]
-        if raw_text.endswith("```"):
-            raw_text = raw_text[:-3]
+        raise RuntimeError(f"All Gemini models exhausted. Last error: {last_error}")
 
-        parsed = json.loads(raw_text.strip())
-        return parsed
 
     def _run_static_analysis(
         self,
@@ -218,28 +227,34 @@ Please respond in this exact JSON schema:
 
         # Build student-friendly code explanation
         if detected_issues:
-            top_issue = detected_issues[0]['title']
-            summary = (
-                f"This {language.capitalize()} code has an issue: **{top_issue}**. "
-                f"Instead of creating a fresh data structure for each call, previous data is unexpectedly shared across calls."
-            )
-            explanation_paragraphs = [
-                f"**1. What this code is trying to do:**\n"
-                f"The function takes an item and adds it to a target list, returning the updated collection.",
+            top_issue = detected_issues[0]
+            title = top_issue.get('title', 'Detected Issue')
+            line_str = top_issue.get('line_number', 'Line 1')
+            exp = top_issue.get('explanation', '')
+            why = top_issue.get('why_it_occurs', '')
 
-                f"**2. Why it behaves unexpectedly:**\n"
-                f"In Python, default arguments are created **only once** when the function is defined, NOT on each function call. "
-                f"Because a list is mutable, `.append()` modifies that single shared list in memory. "
-                f"Any later call that omits the second argument ends up reusing that exact same list.",
+            summary = f"Detected issue: **{title}** ({line_str}). {exp}"
 
-                f"**3. The simple rule:**\n"
-                f"Never use a mutable container (`[]` or `{{}}`) as a default argument. Always default to `None` and initialize a fresh list inside."
-            ]
+            # Tailor explanation based on the actual issue detected
+            if "Mutable Default" in title:
+                explanation_paragraphs = [
+                    f"**1. What this code is trying to do:**\n"
+                    f"The function defines a parameter with a default mutable argument.",
+                    f"**2. Why it behaves unexpectedly:**\n{why}",
+                    f"**3. The simple rule:**\n{suggested_fix}"
+                ]
+            else:
+                explanation_paragraphs = [
+                    f"**1. What is happening in the code:**\n{exp}",
+                    f"**2. Why this occurs:**\n{why}",
+                    f"**3. Recommended Solution:**\n{suggested_fix}"
+                ]
         else:
             summary = f"Code structure is syntactically valid across {len(lines)} line(s)."
             explanation_paragraphs = [
                 "The code structure defines functions and handles variables appropriately."
             ]
+
 
         if problem_description:
             explanation_paragraphs.insert(
@@ -330,16 +345,20 @@ Please respond in this exact JSON schema:
                                 corrected = new_sig_code
 
         except SyntaxError as e:
+            fixed_code, exp, why, fix = self._repair_python_syntax(code, e.msg)
+            cites = find_citation_for_keywords(["syntax", "syntaxerror", "exception", "runtime errors", "error"])
+            clean_title = f"SyntaxError: {e.msg.split('(')[0].strip().capitalize()}"
             issues.append({
-                "title": "Python Syntax Error",
+                "title": clean_title,
                 "severity": "Critical",
-                "line_number": f"Line {e.lineno}",
-                "code_excerpt": e.text.strip() if e.text else "",
-                "explanation": f"The Python code has a syntax error: {e.msg}",
-                "why_it_occurs": "Python encountered invalid syntax or unexpected punctuation.",
-                "cited_sources": []
+                "line_number": f"Line {e.lineno or 1}",
+                "code_excerpt": e.text.strip() if e.text else code.strip(),
+                "explanation": exp,
+                "why_it_occurs": why,
+                "cited_sources": cites
             })
-            return issues, code, "Check Python punctuation, parenthesis matching, or indentation."
+            return issues, fixed_code, fix
+
 
         # 2. Check for range(len(...) + 1) -> IndexError
         lines = code.splitlines()
@@ -454,3 +473,98 @@ Please respond in this exact JSON schema:
     ) -> tuple[List[Dict[str, Any]], str, str]:
         issues = []
         return issues, code, "Perform standard input validation and type checking."
+
+    def _repair_python_syntax(self, code: str, error_msg: str) -> tuple[str, str, str, str]:
+        """
+        Intelligently analyzes and auto-repairs common Python syntax errors:
+        - Unterminated string literals (e.g. print("titesh) or 'hello)
+        - Missing closing parentheses (e.g. print("titesh")
+        - Missing colons on def/if/for/while/class
+        - Python 2 print statements (e.g. print "hello")
+        """
+        lines = code.splitlines()
+        corrected_lines = list(lines) if lines else [code]
+        explanation = f"The Python code has a syntax error: {error_msg}"
+        why = "Python encountered invalid syntax or unexpected punctuation."
+        fix_desc = "Review syntax punctuation, quotes, and closing parentheses."
+
+        err_lower = (error_msg or "").lower()
+
+        # 1. Unterminated string literal: e.g. print("titesh)
+        if "unterminated string" in err_lower or "eol while scanning" in err_lower or any(
+            (line.count('"') % 2 != 0 or line.count("'") % 2 != 0) for line in lines
+        ):
+            for idx, line in enumerate(lines):
+                # Check for unclosed double quote before closing parenthesis: print("hello)
+                if re.search(r'"[^"]*\)', line) and line.count('"') % 2 != 0:
+                    corrected_lines[idx] = re.sub(r'(")([^"]*)\)', r'\1\2\1)', line)
+                    explanation = f"Line {idx+1} has an unterminated string literal. The opening quotation mark (\") was never closed before the closing parenthesis."
+                    why = "In Python, string literals must have matching quotation marks on both sides. A missing quote prevents Python from parsing where the text ends."
+                    fix_desc = f'Add a closing quotation mark before the closing parenthesis: `{corrected_lines[idx].strip()}`'
+                    break
+                # Check for unclosed single quote before closing parenthesis: print('hello)
+                elif re.search(r"'[^']*\)", line) and line.count("'") % 2 != 0:
+                    corrected_lines[idx] = re.sub(r"(')([^']*)\)", r"\1\2\1)", line)
+                    explanation = f"Line {idx+1} has an unterminated string literal. The opening single quote (') was never closed before the closing parenthesis."
+                    why = "In Python, string literals must have matching quotation marks on both sides. A missing quote prevents Python from parsing where the text ends."
+                    fix_desc = f'Add a closing single quotation mark before the closing parenthesis: `{corrected_lines[idx].strip()}`'
+                    break
+                # Trailing unclosed quote at end of line: x = "hello
+                elif line.count('"') % 2 != 0:
+                    corrected_lines[idx] = line + '"'
+                    explanation = f"Line {idx+1} has an unclosed string literal at the end of the line."
+                    why = "Every string literal opened with `\"` must be closed with `\"`."
+                    fix_desc = f'Add a closing double quote at the end of line {idx+1}: `{corrected_lines[idx].strip()}`'
+                    break
+                elif line.count("'") % 2 != 0:
+                    corrected_lines[idx] = line + "'"
+                    explanation = f"Line {idx+1} has an unclosed string literal at the end of the line."
+                    why = "Every string literal opened with `'` must be closed with `'`."
+                    fix_desc = f'Add a closing single quote at the end of line {idx+1}: `{corrected_lines[idx].strip()}`'
+                    break
+
+        # 2. Missing closing parenthesis/bracket/brace
+        elif "was never closed" in err_lower or "unexpected eof" in err_lower:
+            open_paren = code.count("(") - code.count(")")
+            open_bracket = code.count("[") - code.count("]")
+            open_brace = code.count("{") - code.count("}")
+            suffix = ""
+            if open_paren > 0:
+                suffix += ")" * open_paren
+            if open_bracket > 0:
+                suffix += "]" * open_bracket
+            if open_brace > 0:
+                suffix += "}" * open_brace
+            if suffix:
+                corrected_lines[-1] = corrected_lines[-1] + suffix
+                explanation = f"A closing delimiter was omitted: missing `{suffix}`."
+                why = "Parentheses, brackets, and braces must be properly balanced and closed."
+                fix_desc = f"Add the missing `{suffix}` at the end: `{corrected_lines[-1].strip()}`"
+
+        # 3. Missing colon at end of statement
+        elif "expected ':'" in err_lower:
+            for idx, line in enumerate(lines):
+                stripped = line.strip()
+                if any(stripped.startswith(kw) for kw in ["def ", "if ", "for ", "while ", "class ", "elif ", "else", "try", "except", "finally", "with "]):
+                    if not stripped.endswith(":"):
+                        corrected_lines[idx] = line + ":"
+                        explanation = f"Line {idx+1} is missing a required colon (`:`) at the end of the `{stripped.split()[0]}` statement."
+                        why = "Python compound statements (def, if, for, while, class) require a colon before the indented block."
+                        fix_desc = f"Add a colon `:` at the end of line {idx+1}: `{corrected_lines[idx].strip()}`"
+                        break
+
+        # 4. Python 2 print statement
+        elif "missing parentheses in call to 'print'" in err_lower:
+            for idx, line in enumerate(lines):
+                stripped = line.strip()
+                if stripped.startswith("print ") and not stripped.startswith("print("):
+                    content = stripped[6:].strip()
+                    corrected_lines[idx] = line.replace(f"print {content}", f"print({content})")
+                    explanation = f"Line {idx+1} uses Python 2 print syntax (`print ...`) without parentheses."
+                    why = "In Python 3, `print()` is a function and requires parentheses around its arguments."
+                    fix_desc = f"Wrap print arguments in parentheses: `{corrected_lines[idx].strip()}`"
+                    break
+
+        corrected_code = "\n".join(corrected_lines)
+        return corrected_code, explanation, why, fix_desc
+
