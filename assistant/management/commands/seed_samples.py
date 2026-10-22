@@ -1,0 +1,55 @@
+import os
+from pathlib import Path
+from django.core.management.base import BaseCommand
+from django.conf import settings
+from assistant.models import Document, DocumentChunk
+from assistant.rag.pipeline import RAGPipeline
+from assistant.rag.extractor import extract_document
+
+class Command(BaseCommand):
+    help = "Seeds and indexes the sample documentation reference pack into the knowledge base."
+
+    def handle(self, *args, **options):
+        sample_dir = settings.BASE_DIR / 'sample_docs'
+        if not sample_dir.exists():
+            self.stdout.write(self.style.ERROR(f"sample_docs directory not found at {sample_dir}"))
+            return
+
+        pipeline = RAGPipeline()
+        sample_files = [f for f in os.listdir(sample_dir) if f.endswith(('.pdf', '.txt'))]
+
+        if not sample_files:
+            self.stdout.write(self.style.WARNING("No sample files found in sample_docs/"))
+            return
+
+        total_new = 0
+        for fname in sample_files:
+            fpath = sample_dir / fname
+            title = fname.replace('_', ' ').replace('-', ' ').title()
+            title = title.replace('.Pdf', '').replace('.Txt', '')
+
+            if Document.objects.filter(title=title).exists():
+                self.stdout.write(f"Skipping existing document: {title}")
+                continue
+
+            try:
+                with open(fpath, 'rb') as f:
+                    content_bytes = f.read()
+
+                extracted = extract_document(content_bytes, fname, len(content_bytes))
+                doc = Document.objects.create(
+                    title=title,
+                    filename=fname,
+                    file_type=extracted["file_type"],
+                    file_size=extracted["file_size"],
+                    total_pages=extracted["total_pages"],
+                    total_chunks=0,
+                    is_sample=True
+                )
+                pipeline.index_document(doc, extracted["pages"])
+                total_new += 1
+                self.stdout.write(self.style.SUCCESS(f"Successfully indexed: {title} ({doc.total_chunks} chunks)"))
+            except Exception as e:
+                self.stdout.write(self.style.ERROR(f"Failed to index {fname}: {e}"))
+
+        self.stdout.write(self.style.SUCCESS(f"Done! Knowledge Base has {Document.objects.count()} docs and {DocumentChunk.objects.count()} chunks."))

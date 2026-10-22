@@ -1,0 +1,8 @@
+# CodeLens AI - Production and Development Dependencies
+# Python 3.10+ / 3.11 / 3.12 / 3.13 / 3.14 compatible
+Django>=5.0.0
+pypdf>=4.0.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+asgiref>=3.8.0
+sqlparse>=0.5.0

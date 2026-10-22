@@ -1,0 +1,66 @@
+================================================================================
+PYTHON OFFICIAL DOCUMENTATION EXCERPT & REFERENCE GUIDE:
+DATA MODEL: MUTABLE VS IMMUTABLE TYPES AND MEMORY SEMANTICS
+Section: The Python Standard Library - Data Model Reference
+================================================================================
+
+1. OBJECT IDENTITY, TYPE, AND VALUE
+-----------------------------------
+Every object in Python has an identity, a type, and a value.
+- Identity: Never changes once created; represented by `id(object)`.
+- Type: Determines allowable operations and values; represented by `type(object)`.
+- Value: Can be mutable or immutable.
+
+
+2. IMMUTABLE TYPES
+------------------
+Objects whose value cannot change after creation are called immutable.
+Examples include:
+- Numbers: `int`, `float`, `complex`, `bool`
+- Strings: `str`
+- Tuples: `tuple`
+- Frozen sets: `frozenset`
+- Bytes: `bytes`
+
+When you attempt to modify an immutable object (e.g., `s = "hello"; s += " world"`),
+Python does not alter the original string in memory. Instead, it instantiates
+a completely new string object and re-binds the variable `s` to point to the new address.
+
+
+3. MUTABLE TYPES
+----------------
+Objects whose value can change in-place are called mutable.
+Examples include:
+- Lists: `list` (methods: `append`, `extend`, `insert`, `pop`, `sort`)
+- Dictionaries: `dict` (methods: `update`, `setdefault`, key assignments)
+- Sets: `set` (methods: `add`, `remove`, `discard`)
+- Bytearrays: `bytearray`
+
+When a mutable object is modified in-place, its memory identity (`id(obj)`) remains
+identical. Any other variable, parameter, or container holding a reference to that
+object immediately observes the mutation.
+
+
+4. ALIASING AND SHARED REFERENCES
+---------------------------------
+Assignment statements in Python never create copies of objects; they merely bind
+names to existing objects.
+
+Example of aliasing:
+    a = [1, 2, 3]
+    b = a           # b and a reference the SAME list in memory
+    b.append(4)
+    print(a)        # Outputs: [1, 2, 3, 4]
+
+To create an independent copy:
+- Shallow copy: `b = a.copy()` or `b = list(a)` or `b = a[:]`
+- Deep copy (for nested structures): `import copy; b = copy.deepcopy(a)`
+
+
+5. IMPLICATIONS FOR FUNCTION PARAMETERS
+---------------------------------------
+Python uses "call by object reference" (also termed call-by-sharing).
+- If you pass an immutable object (e.g. integer or string) to a function,
+  the caller's variable cannot be modified by the function.
+- If you pass a mutable object (e.g. list or dictionary), any in-place mutation
+  performed inside the function modifies the caller's object directly.

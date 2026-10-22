@@ -1,0 +1,568 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CodeLens AI — AI-Powered Code Explainer & Debugger with RAG</title>
+  <meta name="description" content="Understand unfamiliar code, identify subtle bugs, and review context-grounded debugging suggestions supported by real documentation using Retrieval-Augmented Generation.">
+  
+  <!-- Bootstrap 5 CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  
+  <!-- Custom Dark Theme Stylesheet -->
+  <link rel="stylesheet" href="{% static 'css/codelens.css' %}?v=9">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>⚡</text></svg>">
+</head>
+<body>
+
+  <!-- Top Navigation Bar -->
+  <nav class="codelens-navbar">
+    <div class="container-fluid px-lg-4 d-flex align-items-center justify-content-between">
+      
+      <!-- Brand & Tagline -->
+      <div class="d-flex align-items-center gap-3">
+        <a href="/" class="brand-logo">
+          <div class="brand-icon">
+            <i class="bi bi-cpu-fill"></i>
+          </div>
+          <div>
+            <div class="d-flex align-items-center">
+              <span>CodeLens AI</span>
+              <span class="brand-badge">RAG 2.0</span>
+            </div>
+            <div class="text-dim small fw-normal d-none d-md-block" style="font-size: 0.72rem;">
+              Understand your code. Find the bug. Trust the evidence.
+            </div>
+          </div>
+        </a>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <ul class="nav nav-pills d-none d-md-flex" id="mainTab" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-pill-btn active" id="explainer-tab" data-bs-toggle="pill" data-bs-target="#explainer-pane" type="button" role="tab">
+            <i class="bi bi-code-slash"></i> Code Explainer & Debugger
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-pill-btn" id="kb-tab" data-bs-toggle="pill" data-bs-target="#kb-pane" type="button" role="tab">
+            <i class="bi bi-journal-bookmark-fill"></i> Knowledge Base
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-pill-btn" id="vector-tab" data-bs-toggle="pill" data-bs-target="#vector-pane" type="button" role="tab">
+            <i class="bi bi-search"></i> Vector Inspector
+          </button>
+        </li>
+      </ul>
+
+      <!-- Status Chips & Settings -->
+      <div class="d-flex align-items-center gap-2">
+        <div class="system-status-chip d-none d-sm-inline-flex" title="Knowledge Base Index">
+          <span class="status-dot"></span>
+          <span class="kb-stats-counter">{{ documents.count }} Docs ({{ total_chunks }} Chunks)</span>
+        </div>
+
+        <div class="system-status-chip d-none d-lg-inline-flex" title="Embedder Engine">
+          <i class="bi bi-vector-pen text-info"></i>
+          <span class="text-truncate" style="max-width: 140px;">{{ active_embedder }}</span>
+        </div>
+
+        <button class="btn btn-secondary-action py-1 px-2" data-bs-toggle="modal" data-bs-target="#settingsModal" title="Configuration & API Keys">
+          <i class="bi bi-gear-fill"></i>
+          <span class="d-none d-sm-inline ms-1">Settings</span>
+        </button>
+      </div>
+
+    </div>
+  </nav>
+
+  <!-- Mobile Tab Buttons -->
+  <div class="d-md-none bg-dark border-bottom border-secondary border-opacity-25 px-3 py-2">
+    <ul class="nav nav-pills nav-fill" role="tablist">
+      <li class="nav-item">
+        <button class="nav-pill-btn active w-100 justify-content-center" data-bs-toggle="pill" data-bs-target="#explainer-pane" type="button">
+          <i class="bi bi-code-slash"></i> Assistant
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-pill-btn w-100 justify-content-center" data-bs-toggle="pill" data-bs-target="#kb-pane" type="button">
+          <i class="bi bi-journal-bookmark-fill"></i> Docs
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-pill-btn w-100 justify-content-center" data-bs-toggle="pill" data-bs-target="#vector-pane" type="button">
+          <i class="bi bi-search"></i> Vector
+        </button>
+      </li>
+    </ul>
+  </div>
+
+  <!-- Main Content Area -->
+  <main class="container-fluid px-lg-4 py-3 flex-grow-1">
+    <div class="tab-content" id="mainTabContent">
+
+      <!-- ========================================== -->
+      <!-- TAB 1: CODE EXPLAINER & DEBUGGER ASSISTANT -->
+      <!-- ========================================== -->
+      <div class="tab-pane fade show active" id="explainer-pane" role="tabpanel">
+        <div class="row g-3">
+
+          <!-- Left Column: Code Input & Configuration -->
+          <div class="col-lg-5">
+            <div class="codelens-card h-100 d-flex flex-column">
+              <div class="codelens-card-header">
+                <h1 class="card-title-main fs-6">
+                  <i class="bi bi-terminal-fill text-violet"></i> Submitted Code & Problem
+                </h1>
+                <span class="text-dim small" id="editor-counter">
+                  <span id="line-count">0 lines</span> &bull; <span id="char-count">0 chars</span>
+                </span>
+              </div>
+
+              <!-- Quick Sample Scenarios Selector -->
+              <div class="mb-3">
+                <label class="form-label text-dim small fw-semibold mb-1" for="sample-scenario-select">
+                  <i class="bi bi-stars text-warning me-1"></i> Quick Test Scenarios (Judge Demos)
+                </label>
+                <select class="form-select form-select-sm bg-dark text-light border-secondary border-opacity-50" id="sample-scenario-select">
+                  <option value="" selected>-- Select a demonstration scenario --</option>
+                  <option value="mutable_default">🐛 Mutable Default Argument Bug (Primary Demo)</option>
+                  <option value="index_error">⚠️ Off-by-One Loop Bounds (IndexError)</option>
+                  <option value="key_error">🔑 Missing Dictionary Key Access (KeyError)</option>
+                  <option value="zero_division">➗ Unhandled Zero Division (ZeroDivisionError)</option>
+                </select>
+              </div>
+
+              <!-- Language & Toolbar -->
+              <div class="mb-2 d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center gap-2">
+                  <label class="text-dim small fw-semibold" for="language-select">Language:</label>
+                  <select class="form-select form-select-sm bg-dark text-light border-secondary border-opacity-50" id="language-select" style="width: 140px;">
+                    <option value="python" selected>Python</option>
+                    <option value="javascript">JavaScript</option>
+                    <option value="java">Java</option>
+                    <option value="cpp">C / C++</option>
+                  </select>
+                </div>
+                <button type="button" class="btn btn-sm btn-link text-dim text-decoration-none p-0 small" onclick="clearEditor()">
+                  <i class="bi bi-x-circle me-1"></i> Clear
+                </button>
+              </div>
+
+              <!-- Primary Action Bar (Shifted to Top of Code Box for Immediate Accessibility) -->
+              <div class="d-flex flex-column gap-2 mb-3">
+                <button type="button" class="btn-primary-action justify-content-center w-100 py-2 fs-6 fw-bold" id="btn-analyze" onclick="submitCodeAnalysis()">
+                  <i class="bi bi-cpu-fill me-1"></i> Analyze Code & Retrieve Docs
+                </button>
+
+                <!-- Sandbox Security Callout -->
+                <div class="security-notice-badge mt-1">
+                  <i class="bi bi-shield-lock-fill text-primary"></i>
+                  <span><strong>Safe Sandbox:</strong> Untrusted code is analyzed statically and is never executed.</span>
+                </div>
+              </div>
+
+              <!-- Monospace Code Editor Area -->
+              <div class="editor-wrapper mb-3 flex-grow-1" style="display: flex !important; flex-direction: column !important; min-height: 420px;">
+                <div class="editor-toolbar" style="flex-shrink: 0;">
+                  <span><i class="bi bi-code-square me-1"></i> Code Editor</span>
+                  <span class="text-dim small">UTF-8 &bull; Ctrl+Enter to Run</span>
+                </div>
+                <textarea 
+                  class="editor-textarea" 
+                  id="code-input" 
+                  style="flex: 1 1 auto !important; height: 100% !important; min-height: 380px !important; resize: none !important; white-space: pre !important; overflow: auto !important;"
+                  spellcheck="false" 
+                  placeholder="# Paste or enter your programming code snippet here...&#10;def add_student_grade(student, grades=[]):&#10;    grades.append(student)&#10;    return grades"></textarea>
+              </div>
+
+              <!-- Problem Description Input -->
+              <div class="mb-2">
+                <label class="form-label text-dim small fw-semibold mb-1" for="problem-input">
+                  Problem Description / Question <span class="text-dim fw-normal">(Optional context)</span>
+                </label>
+                <textarea 
+                  class="problem-textarea" 
+                  id="problem-input" 
+                  rows="2" 
+                  placeholder="e.g. Why does subsequent calls retain previously added students?"></textarea>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Right Column: Context-Grounded Analysis & Evidence -->
+          <div class="col-lg-7" id="analysis-results-container">
+            <div class="codelens-card h-100 d-flex flex-column">
+              <div class="codelens-card-header">
+                <h2 class="card-title-main fs-6">
+                  <i class="bi bi-file-earmark-check-fill text-cyan"></i> Context-Grounded Analysis & Evidence
+                </h2>
+                <span class="badge bg-dark border border-secondary text-dim small" id="res-model-badge">
+                  CodeLens Grounded Engine
+                </span>
+              </div>
+
+              <!-- State A: Empty State -->
+              <div id="results-empty-state" class="py-5 text-center my-auto">
+                <div class="brand-icon mx-auto mb-3" style="width: 54px; height: 54px; font-size: 1.6rem;">
+                  <i class="bi bi-compass-fill"></i>
+                </div>
+                <h3 class="fs-5 text-light fw-semibold mb-2">Ready to Analyze Your Code</h3>
+                <p class="text-muted small mx-auto mb-4" style="max-width: 480px;">
+                  CodeLens AI inspects your code, performs semantic search across your uploaded documentation,
+                  and generates a grounded explanation backed by verifiable source citations.
+                </p>
+
+                <div class="row g-2 text-start justify-content-center mx-auto" style="max-width: 540px;">
+                  <div class="col-sm-6">
+                    <div class="p-2 border border-secondary border-opacity-25 rounded-2 bg-dark bg-opacity-50">
+                      <div class="text-violet small fw-bold"><i class="bi bi-question-circle me-1"></i> What does it do?</div>
+                      <div class="text-dim small">Structural breakdown of functions and logic.</div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6">
+                    <div class="p-2 border border-secondary border-opacity-25 rounded-2 bg-dark bg-opacity-50">
+                      <div class="text-rose small fw-bold" style="color:var(--accent-rose);"><i class="bi bi-bug me-1"></i> Why might it fail?</div>
+                      <div class="text-dim small">Pinpoint runtime risks with severity ratings.</div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6">
+                    <div class="p-2 border border-secondary border-opacity-25 rounded-2 bg-dark bg-opacity-50">
+                      <div class="text-emerald small fw-bold" style="color:var(--accent-emerald);"><i class="bi bi-wrench-adjustable me-1"></i> How can I fix it?</div>
+                      <div class="text-dim small">Concrete corrections and complete corrected code.</div>
+                    </div>
+                  </div>
+                  <div class="col-sm-6">
+                    <div class="p-2 border border-secondary border-opacity-25 rounded-2 bg-dark bg-opacity-50">
+                      <div class="text-cyan small fw-bold"><i class="bi bi-journal-check me-1"></i> Which docs support it?</div>
+                      <div class="text-dim small">Real retrieved passages with page metadata.</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- State B: Loading State -->
+              <div id="results-loading-state" class="py-5 text-center my-auto d-none">
+                <div class="spinner-border text-info mb-3" style="width: 3rem; height: 3rem;" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <h4 class="fs-6 text-light fw-semibold mb-2">Executing RAG Pipeline...</h4>
+                <div class="text-dim small mb-3">
+                  Generating query embeddings &bull; Searching vector store &bull; Grounding response
+                </div>
+                <div class="progress mx-auto" style="max-width: 300px; height: 4px;">
+                  <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" style="width: 100%;"></div>
+                </div>
+              </div>
+
+              <!-- State C: Content State (Active Results) -->
+              <div id="results-content-state" class="d-none">
+
+                <!-- 1. Grounding Status Banner -->
+                <div id="grounding-status-banner"></div>
+
+                <!-- 2. Executive Summary -->
+                <div class="codelens-card mb-3" style="background:#0c1220;">
+                  <div class="section-tag-header">
+                    <i class="bi bi-card-text me-2"></i> Executive Summary
+                  </div>
+                  <div class="text-white fs-6 lh-base" id="res-summary-text"></div>
+                </div>
+
+                <!-- 3. Code Explanation -->
+                <div class="codelens-card mb-3" style="background:#0e1629; border-left: 4px solid #38bdf8;">
+                  <div class="section-tag-header" style="color:#38bdf8 !important;">
+                    <i class="bi bi-info-circle me-2"></i> Code Explanation & Architecture
+                  </div>
+                  <div id="res-explanation-text" style="color: #f8fafc !important; font-size: 1.08rem !important; line-height: 1.8 !important;"></div>
+                </div>
+
+                <!-- 4. Potential Bugs & Issues -->
+                <div class="mb-3">
+                  <div class="section-tag-header mb-2" style="color:#f87171 !important;">
+                    <i class="bi bi-exclamation-octagon me-2"></i> Potential Bugs & Runtime Risks
+                  </div>
+                  <div id="res-issues-container"></div>
+                </div>
+
+                <!-- 5. Suggested Correction & Code -->
+                <div class="codelens-card mb-3" style="background:#0c1220; border-left: 4px solid var(--accent-emerald);">
+                  <div class="section-tag-header" style="color:#34d399 !important;">
+                    <i class="bi bi-patch-check-fill me-2"></i> Suggested Correction
+                  </div>
+                  <div class="text-white fs-6 lh-base mb-3" id="res-fix-description"></div>
+
+                  <div class="position-relative">
+                    <button class="copy-code-btn" id="btn-copy-code" onclick="copyCorrectedCode()">
+                      <i class="bi bi-clipboard me-1"></i> Copy Code
+                    </button>
+                    <pre class="code-display-block mb-0"><code id="res-corrected-code"></code></pre>
+                  </div>
+                </div>
+
+                <!-- 6. Retrieved Source Documentation Passages -->
+                <div class="mb-2">
+                  <div class="d-flex align-items-center justify-content-between mb-2">
+                    <div class="section-tag-header" style="color:#38bdf8 !important;">
+                      <i class="bi bi-quote me-2"></i> Retrieved Source Documentation (RAG Evidence)
+                    </div>
+                    <span class="text-dim small">Real Vector Retrieval Results</span>
+                  </div>
+                  <div id="res-sources-container"></div>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ========================================== -->
+      <!-- TAB 2: KNOWLEDGE BASE & DOCUMENT INGESTION -->
+      <!-- ========================================== -->
+      <div class="tab-pane fade" id="kb-pane" role="tabpanel">
+        <div class="row g-3">
+          
+          <!-- Ingestion Controls -->
+          <div class="col-lg-4">
+            <div class="codelens-card h-100">
+              <div class="codelens-card-header">
+                <h2 class="card-title-main fs-6">
+                  <i class="bi bi-cloud-arrow-up-fill text-violet"></i> Document Ingestion
+                </h2>
+                <span class="badge bg-secondary bg-opacity-25 text-dim small">PDF & TXT</span>
+              </div>
+
+              <p class="text-muted small mb-3">
+                Upload programming notes, official language specifications, or tutorials to ground CodeLens in trusted documentation.
+              </p>
+
+              <!-- Upload Dropzone -->
+              <div class="upload-dropzone mb-3" id="upload-dropzone" onclick="document.getElementById('document-file-input').click()">
+                <i class="bi bi-file-earmark-arrow-up fs-2 text-violet mb-2 d-block"></i>
+                <div class="text-light fw-semibold small mb-1">Click to browse or drag and drop</div>
+                <div class="text-dim small">Supports PDF and TXT (Max 10MB)</div>
+                <input type="file" id="document-file-input" class="d-none" accept=".pdf,.txt">
+              </div>
+
+              <div id="upload-status-indicator" class="mb-3"></div>
+
+              <hr class="border-secondary border-opacity-25 my-3">
+
+              <!-- Sample Pack Action -->
+              <div>
+                <label class="form-label text-dim small fw-semibold mb-1">
+                  <i class="bi bi-lightning-charge-fill text-warning me-1"></i> Quick Start Reference Pack
+                </label>
+                <p class="text-muted small mb-2">
+                  Instantly ingest the authentic Python documentation pack covering mutable default arguments, IndexError, and runtime exceptions.
+                </p>
+                <button type="button" class="btn btn-secondary-action w-100 justify-content-center text-light" id="btn-load-samples" onclick="loadSamplePack()">
+                  <i class="bi bi-lightning-charge-fill text-warning me-1"></i> Load Python Reference Pack
+                </button>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Document Inventory Table -->
+          <div class="col-lg-8">
+            <div class="codelens-card h-100">
+              <div class="codelens-card-header">
+                <h2 class="card-title-main fs-6">
+                  <i class="bi bi-folder-check text-cyan"></i> Indexed Documents
+                </h2>
+                <span class="badge bg-dark border border-secondary text-cyan small kb-stats-counter">
+                  {{ documents.count }} Docs ({{ total_chunks }} Chunks)
+                </span>
+              </div>
+
+              <div class="table-responsive">
+                <table class="codelens-table">
+                  <thead>
+                    <tr>
+                      <th>Document Title</th>
+                      <th>Format</th>
+                      <th>Size</th>
+                      <th>Pages</th>
+                      <th>Chunks</th>
+                      <th>Indexed At</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="documents-table-body">
+                    {% for doc in documents %}
+                    <tr>
+                      <td class="fw-bold text-white">{{ doc.title }}</td>
+                      <td>
+                        <span class="badge {% if doc.file_type == 'pdf' %}bg-danger bg-opacity-25 text-danger{% else %}bg-primary bg-opacity-25 text-primary{% endif %} border border-opacity-25">
+                          {{ doc.file_type|upper }}
+                        </span>
+                      </td>
+                      <td>{{ doc.formatted_size }}</td>
+                      <td>{{ doc.total_pages }}</td>
+                      <td><span class="badge bg-secondary bg-opacity-25 text-light">{{ doc.total_chunks }} chunks</span></td>
+                      <td class="text-dim small">{{ doc.created_at|date:"Y-m-d H:i" }}</td>
+                      <td>
+                        <button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="deleteDocument({{ doc.id }}, '{{ doc.title|escapejs }}')">
+                          <i class="bi bi-trash3"></i>
+                        </button>
+                      </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                      <td colspan="7" class="text-center py-4 text-muted">
+                        <i class="bi bi-folder-x fs-3 d-block mb-2"></i>
+                        No documents indexed yet. Upload a PDF/TXT or click "Load Python Reference Pack".
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- ========================================== -->
+      <!-- TAB 3: VECTOR SEARCH INSPECTOR             -->
+      <!-- ========================================== -->
+      <div class="tab-pane fade" id="vector-pane" role="tabpanel">
+        <div class="row g-3">
+          <div class="col-lg-8 mx-auto">
+            <div class="codelens-card">
+              <div class="codelens-card-header">
+                <h2 class="card-title-main fs-6">
+                  <i class="bi bi-search text-cyan"></i> Vector Search Inspector
+                </h2>
+                <span class="badge bg-dark border border-secondary text-dim small">Real-time Similarity Test</span>
+              </div>
+
+              <p class="text-muted small mb-3">
+                Test semantic retrieval directly without generating code explanations. Type a natural language query or concept
+                to verify real vector matching and relevance scoring.
+              </p>
+
+              <div class="input-group mb-3">
+                <input 
+                  type="text" 
+                  class="form-control bg-dark text-light border-secondary" 
+                  id="search-preview-input" 
+                  placeholder="e.g. mutable default argument list parameter evaluation"
+                  value="mutable default argument list">
+                <button class="btn-primary-action" id="btn-run-search-preview" onclick="runSearchPreview()">
+                  <i class="bi bi-search me-1"></i> Search Vector Store
+                </button>
+              </div>
+
+              <div id="search-preview-results"></div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Footer -->
+  <footer class="codelens-footer">
+    <div class="container-fluid px-lg-4 d-flex flex-column flex-sm-row align-items-center justify-content-between gap-2">
+      <div>
+        <strong>CodeLens AI</strong> &bull; AI-Powered Programming Code Explainer and Debugging Assistant Using RAG.
+      </div>
+      <div class="d-flex align-items-center gap-3">
+        <span>Django 6.1 Backend</span>
+        <span>&bull;</span>
+        <span>Pure Semantic Vector Store</span>
+        <span>&bull;</span>
+        <span class="text-info"><i class="bi bi-shield-check me-1"></i>Safe Static Analysis</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Modal: Source Detail Passages -->
+  <div class="modal fade" id="sourceDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content bg-dark border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title text-light fs-6" id="sourceModalTitle">Document Passage</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="small text-dim mb-3 pb-2 border-bottom border-secondary border-opacity-50" id="sourceModalMeta"></div>
+          <pre class="code-display-block" style="white-space: pre-wrap; font-size: 0.85rem;" id="sourceModalContent"></pre>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Settings & API Configuration -->
+  <div class="modal fade" id="settingsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content bg-dark border-secondary">
+        <div class="modal-header border-secondary">
+          <h5 class="modal-title text-light fs-6">
+            <i class="bi bi-gear-fill text-violet me-2"></i> Engine Configuration & API Keys
+          </h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <p class="text-muted small mb-3">
+            Configure external AI providers or use CodeLens's built-in 512-dimensional semantic vector engine for 100% offline operation.
+          </p>
+
+          <div class="mb-3">
+            <label class="form-label text-light small fw-semibold" for="settings-gemini-key">
+              Google Gemini API Key <span class="text-dim fw-normal">(Optional)</span>
+            </label>
+            <input 
+              type="password" 
+              class="form-control form-control-sm bg-black text-light border-secondary" 
+              id="settings-gemini-key" 
+              placeholder="{% if has_gemini %}{{ gemini_masked_key }}{% else %}Enter AIzaSy... (leave blank for local mode){% endif %}">
+            <div class="form-text text-dim small">
+              If configured, CodeLens utilizes Google Gemini 2.5 Flash for dynamic generation and text-embedding-004.
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label text-light small fw-semibold" for="settings-embedder-pref">
+              Embedder Preference
+            </label>
+            <select class="form-select form-select-sm bg-black text-light border-secondary" id="settings-embedder-pref">
+              <option value="auto" selected>Automatic (Gemini if key set, else Local Semantic Vector)</option>
+              <option value="local">Always use Local Semantic Vector (512-dim, offline)</option>
+              <option value="gemini">Google Gemini text-embedding-004</option>
+            </select>
+          </div>
+
+          <div id="settings-save-status"></div>
+        </div>
+        <div class="modal-footer border-secondary">
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="button" class="btn-primary-action py-1 px-3" onclick="saveSettings()">Save Configuration</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bootstrap 5 Bundle JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Application Client JS -->
+  <script src="{% static 'js/codelens.js' %}?v=9"></script>
+</body>
+</html>

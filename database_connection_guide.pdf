@@ -1,0 +1,102 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 1471 >>
+stream
+BT
+/F1 11 Tf
+18 TL
+50 740 Td
+(CODELENS KNOWLEDGE BASE - DATABASE CONNECTIONS & CONTEXT MANAGERS \(PAGE 1\)) '
+(================================================================================) '
+(Module: Database Connection Pooling and Resource Safety Guide) '
+() '
+(1. DATABASE CONNECTION LEAKS IN BACKEND SERVICES) '
+(--------------------------------------------------------------------------------) '
+(A common critical issue in backend services is failing to close database connections.) '
+(When a connection is opened via db.connect\(\) without a context manager, any runtime) '
+(exception in subsequent queries causes the connection to remain open indefinitely.) '
+() '
+(Symptom: OperationalError: Too many connections / connection pool exhaustion.) '
+() '
+(Problematic Pattern:) '
+(    conn = db_pool.get_connection\(\)) '
+(    cursor = conn.cursor\(\)) '
+(    cursor.execute\('SELECT * FROM users WHERE active = 1'\)) '
+(    records = cursor.fetchall\(\)) '
+(    # If an error happens above, conn.close\(\) is never reached!) '
+(    conn.close\(\)) '
+() '
+(2. SAFE RESOURCE RECOVERY USING CONTEXT MANAGERS) '
+(--------------------------------------------------------------------------------) '
+(In Python, always manage connections using the 'with' statement or try-finally blocks.) '
+(The context manager guarantees that the __exit__ method executes conn.close\(\) or) '
+(returns the connection back to the connection pool, even if an exception is raised.) '
+ET
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 6 0 R >>
+endobj
+6 0 obj
+<< /Length 1264 >>
+stream
+BT
+/F1 11 Tf
+18 TL
+50 740 Td
+(CODELENS KNOWLEDGE BASE - DATABASE CONNECTIONS & CONTEXT MANAGERS \(PAGE 2\)) '
+(================================================================================) '
+(Module: Recommended Database Cleanup Idioms and Best Practices) '
+() '
+(3. THE RECOMMENDED CONNECTION CONTEXT MANAGER PATTERN) '
+(--------------------------------------------------------------------------------) '
+(Standard production idiom for leak-proof database transactions:) '
+() '
+(    with db_pool.get_connection\(\) as conn:) '
+(        with conn.cursor\(\) as cursor:) '
+(            cursor.execute\('SELECT * FROM users WHERE active = 1'\)) '
+(            records = cursor.fetchall\(\)) '
+() '
+(4. EXPLICIT CLEANUP WITH TRY-FINALLY BLOCKS) '
+(--------------------------------------------------------------------------------) '
+(If a context manager is not supported by the driver, use try-finally:) '
+(    conn = db_pool.get_connection\(\)) '
+(    try:) '
+(        cursor = conn.cursor\(\)) '
+(        cursor.execute\(query\)) '
+(        return cursor.fetchall\(\)) '
+(    finally:) '
+(        conn.close\(\)  # Guaranteed execution prevents connection leaks) '
+() '
+(5. RULE FOR CODE REVIEWS: Never open raw I/O or network connections without 'with'.) '
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000001775 00000 n 
+0000001901 00000 n 
+0000003216 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+3286
+%%EOF

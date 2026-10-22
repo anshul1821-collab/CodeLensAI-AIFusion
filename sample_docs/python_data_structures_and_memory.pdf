@@ -1,0 +1,75 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 7 0 R >> >> >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R /Resources << /Font << /F1 7 0 R >> >> >>
+endobj
+5 0 obj
+<< /Length 881 >>
+stream
+BT /F1 11 Tf 50 720 Td 15 TL
+(CODELENS AI - PYTHON REFERENCE MANUAL \(PAGE 1\)) Tj T*
+(==============================================) Tj T*
+T*
+(Topic: Python Function Parameters and Mutable Defaults) Tj T*
+T*
+(1. Function parameter defaults are evaluated once at definition time.) Tj T*
+(2. When a default parameter is assigned a mutable container like [] or {},) Tj T*
+(   subsequent calls share the identical memory reference.) Tj T*
+(3. To avoid unexpected state retention across calls, use None as default:) Tj T*
+(   def safe_append\(item, target=None\):) Tj T*
+(       if target is None:) Tj T*
+(           target = []) Tj T*
+(       target.append\(item\)) Tj T*
+(       return target) Tj T*
+T*
+(4. Python binds default arguments to the function object attribute __defaults__.) Tj T*
+(5. Modifying default arguments in place is one of the most common student bugs.) Tj T*
+ET
+endstream
+endobj
+6 0 obj
+<< /Length 761 >>
+stream
+BT /F1 11 Tf 50 720 Td 15 TL
+(CODELENS AI - PYTHON REFERENCE MANUAL \(PAGE 2\)) Tj T*
+(==============================================) Tj T*
+T*
+(Topic: Python Built-in Sequences and Index Boundaries) Tj T*
+T*
+(1. Sequences in Python are zero-indexed from 0 to len\(seq\) - 1.) Tj T*
+(2. An IndexError is raised whenever an index outside this range is requested.) Tj T*
+(3. Common off-by-one bug pattern: range\(len\(items\) + 1\).) Tj T*
+(4. Best practice is to iterate directly over elements: for item in items:) Tj T*
+(5. KeyError is raised when accessing a non-existent key in a dictionary.) Tj T*
+(6. Always use dict.get\(key, default\) for safe retrieval with fallbacks.) Tj T*
+(7. ZeroDivisionError occurs when divisor evaluates to 0 at runtime.) Tj T*
+ET
+endstream
+endobj
+7 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000127 00000 n 
+0000000253 00000 n 
+0000000379 00000 n 
+0000001311 00000 n 
+0000002123 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+2193
+%%EOF

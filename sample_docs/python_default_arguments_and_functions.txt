@@ -1,0 +1,85 @@
+================================================================================
+PYTHON OFFICIAL DOCUMENTATION EXCERPT & REFERENCE GUIDE:
+FUNCTION DEFINITIONS AND DEFAULT ARGUMENT VALUES
+Section: Control Flow Tools - Default Parameter Values (Tutorial 4.8.1)
+================================================================================
+
+1. DEFAULT ARGUMENT VALUES IN PYTHON
+------------------------------------
+In Python, functions can have default values for one or more arguments.
+This creates a function that can be called with fewer arguments than it is defined
+to allow.
+
+Syntax example:
+    def ask_ok(prompt, retries=4, reminder='Please try again!'):
+        while True:
+            reply = input(prompt)
+            if reply in {'y', 'ye', 'yes'}:
+                return True
+            if reply in {'n', 'no', 'nop', 'nope'}:
+                return False
+            retries = retries - 1
+            if retries < 0:
+                raise ValueError('invalid user response')
+            print(reminder)
+
+This function can be called in several ways:
+- Giving only the mandatory argument: ask_ok('Do you really want to quit?')
+- Giving one of the optional arguments: ask_ok('Overwrite the file?', 2)
+- Giving all arguments: ask_ok('Overwrite?', 2, 'Come on, only yes or no!')
+
+
+2. THE CRITICAL DEFAULT ARGUMENT EVALUATION RULE
+------------------------------------------------
+IMPORTANT WARNING (Python Official Tutorial Section 4.8.1):
+Default parameter values are evaluated when the function definition is executed
+in the defining scope. This means that the expression is evaluated only once,
+when the function is defined, and NOT every time the function is called!
+
+This evaluation timing difference is especially crucial when the default value
+is a mutable object such as a list, dictionary, or instances of most classes.
+
+Consider the classic problematic example:
+    def f(a, L=[]):
+        L.append(a)
+        return L
+
+What happens during execution:
+- At function definition time: Python evaluates `[]` once, allocating a single
+  list object in memory and storing a reference to it in `f.__defaults__`.
+- First call: `print(f(1))` outputs: `[1]`
+- Second call: `print(f(2))` outputs: `[1, 2]`
+- Third call: `print(f(3))` outputs: `[1, 2, 3]`
+
+The default list `L` accumulates the arguments passed to it on subsequent calls
+because every call without a second argument shares the exact same list instance.
+
+
+3. THE RECOMMENDED STANDARD IDIOM (FIX)
+---------------------------------------
+If you do not want the default value to be shared between subsequent calls,
+you must write the function using `None` as the default sentinel value:
+
+    def f(a, L=None):
+        if L is None:
+            L = []
+        L.append(a)
+        return L
+
+Why this fix works:
+1. `None` is an immutable singleton in Python.
+2. In each function invocation where `L` is omitted, `L` evaluates to `None`.
+3. The guard `if L is None:` triggers, creating a brand new empty list `[]`
+   allocated specifically for that call's execution frame.
+4. Subsequent calls each receive their own independent list instance, preventing
+   unexpected state leakage or cross-student data corruption.
+
+
+4. PARAMETER BINDING AND VARIABLE SCOPES
+----------------------------------------
+When a function is called, the positional arguments are bound to parameters in order.
+Keyword arguments can be passed in any order matching the parameter names.
+Arguments passed explicitly always override the default value.
+When passing an existing list explicitly (`f(10, my_existing_list)`), the passed list
+will be modified in-place by `append()`, which is intended behavior when a mutable
+collection is supplied by the caller.

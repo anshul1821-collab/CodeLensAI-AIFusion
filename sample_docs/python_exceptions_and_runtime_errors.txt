@@ -1,0 +1,83 @@
+================================================================================
+PYTHON OFFICIAL DOCUMENTATION EXCERPT & REFERENCE GUIDE:
+BUILT-IN EXCEPTIONS AND COMMON RUNTIME ERRORS
+Section: Errors and Exceptions (Standard Library reference)
+================================================================================
+
+1. OVERVIEW OF PYTHON EXCEPTIONS
+--------------------------------
+Even if a statement or expression is syntactically correct, it may cause an error
+when an attempt is made to execute it. Errors detected during execution are called
+exceptions and are not unconditionally fatal.
+
+Most exceptions are not handled by programs, however, and result in error messages.
+
+
+2. INDEXERROR: LIST INDEX OUT OF RANGE
+--------------------------------------
+Raised when a sequence subscript is out of range. (Slice indices are silently
+truncated to fall in the allowed range; if an index is not an integer, TypeError
+is raised.)
+
+Common cause: Off-by-one errors in iteration.
+In Python, sequences are 0-indexed: valid indices for a sequence of length N
+are strictly `0, 1, ..., N - 1`.
+
+Example of off-by-one bug:
+    items = ["apple", "banana", "cherry"]  # len(items) is 3
+    for i in range(len(items) + 1):        # generates 0, 1, 2, 3
+        print(items[i])                     # Crash at i=3: IndexError: list index out of range
+
+Remedy:
+Iterate directly over sequence elements:
+    for item in items:
+        print(item)
+Or use standard range without `+ 1`:
+    for i in range(len(items)):
+        print(items[i])
+
+
+3. KEYERROR: MAPPING KEY NOT FOUND
+----------------------------------
+Raised when a mapping (dictionary) key is not found in the set of existing keys.
+
+Example:
+    student_record = {"name": "Alice", "id": 101}
+    email = student_record["email"]  # Raises KeyError: 'email'
+
+Remedies:
+1. Use the dictionary `.get()` method with an optional default value:
+    email = student_record.get("email", "not_provided@domain.com")
+2. Check membership with `in` keyword:
+    if "email" in student_record:
+        email = student_record["email"]
+
+
+4. ZERODIVISIONERROR
+--------------------
+Raised when the second argument of a division or modulo operation is zero.
+The associated value is a string indicating the type of the operands and operation.
+
+Example:
+    conversion_rate = (conversions / total_visitors) * 100
+If `total_visitors` is 0, execution immediately halts with:
+`ZeroDivisionError: division by zero`.
+
+Remedy:
+Always validate that denominators are non-zero before performing division:
+    if total_visitors > 0:
+        conversion_rate = (conversions / total_visitors) * 100
+    else:
+        conversion_rate = 0.0
+
+
+5. BEST PRACTICES FOR EXCEPTION HANDLING
+----------------------------------------
+- Avoid bare `except:` clauses. Catch specific exceptions:
+    try:
+        data = parse_json(raw_input)
+    except (ValueError, KeyError) as err:
+        logger.warning(f"Failed to parse input: {err}")
+
+- Use `finally:` to release resources (or prefer `with` context managers).
+- Do not suppress exceptions silently unless there is a documented reason.
