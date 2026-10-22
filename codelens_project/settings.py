@@ -88,12 +88,45 @@ WSGI_APPLICATION = 'codelens_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+sqlite_path_env = os.environ.get('SQLITE_PATH')
+if sqlite_path_env:
+    db_file_path = Path(sqlite_path_env)
+elif os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'):
+    # Serverless environments (Vercel, AWS Lambda) have read-only root filesystems; only /tmp is writable
+    db_file_path = Path('/tmp') / 'db.sqlite3'
+else:
+    db_file_path = BASE_DIR / 'db.sqlite3'
+
+# Ensure the database parent directory exists
+try:
+    db_file_path.parent.mkdir(parents=True, exist_ok=True)
+except Exception:
+    pass
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': db_file_path,
     }
 }
+
+# Optional external PostgreSQL via DATABASE_URL if configured
+database_url = os.environ.get('DATABASE_URL')
+if database_url and database_url.startswith(('postgres://', 'postgresql://')):
+    try:
+        from urllib.parse import urlparse
+        url = urlparse(database_url)
+        DATABASES['default'] = {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': url.path.lstrip('/'),
+            'USER': url.username,
+            'PASSWORD': url.password,
+            'HOST': url.hostname,
+            'PORT': url.port or 5432,
+        }
+    except Exception:
+        pass
+
 
 
 # Password validation
