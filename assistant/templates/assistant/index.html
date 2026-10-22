@@ -130,10 +130,14 @@
                 </label>
                 <select class="form-select form-select-sm bg-dark text-light border-secondary border-opacity-50" id="sample-scenario-select">
                   <option value="" selected>-- Select a demonstration scenario --</option>
-                  <option value="mutable_default">🐛 Mutable Default Argument Bug (Primary Demo)</option>
-                  <option value="index_error">⚠️ Off-by-One Loop Bounds (IndexError)</option>
-                  <option value="key_error">🔑 Missing Dictionary Key Access (KeyError)</option>
-                  <option value="zero_division">➗ Unhandled Zero Division (ZeroDivisionError)</option>
+                  <option value="mutable_default">🐍 Python: Mutable Default Argument Bug (Primary Demo)</option>
+                  <option value="index_error">🐍 Python: Off-by-One Loop Bounds (IndexError)</option>
+                  <option value="key_error">🐍 Python: Missing Dictionary Key Access (KeyError)</option>
+                  <option value="zero_division">🐍 Python: Unhandled Zero Division (ZeroDivisionError)</option>
+                  <option value="js_undefined">⚡ JavaScript: Cannot read properties of undefined (TypeError)</option>
+                  <option value="java_npe_string">☕ Java: NullPointerException & String Equality Trap</option>
+                  <option value="cpp_segfault">⚙️ C++: Dangling Pointer & Segmentation Fault (SIGSEGV)</option>
+                  <option value="sql_injection">🗄️ SQL: NULL Comparison Trap & Injection Risk</option>
                 </select>
               </div>
 
@@ -146,8 +150,10 @@
                     <option value="javascript">JavaScript</option>
                     <option value="java">Java</option>
                     <option value="cpp">C / C++</option>
+                    <option value="sql">SQL</option>
                   </select>
                 </div>
+
                 <button type="button" class="btn btn-sm btn-link text-dim text-decoration-none p-0 small" onclick="clearEditor()">
                   <i class="bi bi-x-circle me-1"></i> Clear
                 </button>

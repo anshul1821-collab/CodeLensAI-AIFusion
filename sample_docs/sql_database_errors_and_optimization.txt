@@ -1,0 +1,85 @@
+# SQL Database Errors, Query Optimization, and Connection Management
+
+## 1. SQL Injection: Vulnerability Analysis and Parameterization
+SQL Injection occurs when untrusted user input is directly concatenated into a dynamic SQL query string:
+```sql
+-- VULNERABLE CODE (Python DB-API / raw query):
+query = f"SELECT * FROM users WHERE username = '{user_input}' AND password = '{password}'"
+-- If user_input is: admin' --
+-- The query becomes:
+SELECT * FROM users WHERE username = 'admin' -- AND password = '...'
+-- This logs in as admin without password verification!
+```
+
+### Remediation: Parameterized Queries (Prepared Statements)
+Never concatenate variables into SQL strings. Always pass parameters separately so the database engine parses the query structure before substituting data:
+```python
+# SECURE: Using placeholders (? or %s depending on driver)
+cursor.execute(
+    "SELECT * FROM users WHERE username = %s AND password = %s",
+    (username, hashed_password)
+)
+```
+
+---
+
+## 2. NULL Comparisons and Three-Valued Logic
+In SQL, comparison with `NULL` using the `=` or `!=` operator always evaluates to `UNKNOWN` (treated as `FALSE` in `WHERE` clauses):
+```sql
+-- BUG: Returns 0 rows, even if there are rows where email is NULL!
+SELECT * FROM customers WHERE email = NULL;
+
+-- FIX: Use IS NULL or IS NOT NULL
+SELECT * FROM customers WHERE email IS NULL;
+```
+### COALESCE Function for Default Fallbacks:
+Use `COALESCE(val1, val2, ...)` to return the first non-null expression:
+```sql
+SELECT customer_id, COALESCE(phone, mobile, 'NO_PHONE') AS contact_phone 
+FROM customers;
+```
+
+---
+
+## 3. The N+1 Query Problem in Object-Relational Mappings (ORMs)
+The N+1 query problem occurs when an application executes 1 initial query to fetch parent records, and then executes N additional queries to fetch related child records in a loop:
+```python
+# VULNERABLE ORM PATTERN (Django):
+orders = Order.objects.all() # 1 Query
+for order in orders:
+    print(order.customer.name) # N Queries executed in loop!
+```
+### Solution: Eager Loading
+1. For foreign keys (`OneToOne` / `ForeignKey`), use `select_related()` (performs a SQL `JOIN`):
+   ```python
+   orders = Order.objects.select_related('customer').all() # Exactly 1 query with INNER JOIN
+   ```
+2. For many-to-many relationships, use `prefetch_related()` (executes 2 optimized queries):
+   ```python
+   articles = Article.objects.prefetch_related('tags').all()
+   ```
+
+---
+
+## 4. Database Connection Pool Exhaustion and Leaks
+Opening a new database connection requires TCP handshakes, TLS negotiation, and process authentication.
+- Problem: If applications create connections without returning them to the pool or closing them, the database reaches `max_connections`, throwing:
+  `OperationalError: too many connections` or `FATAL: remaining connection slots are reserved`.
+- Defensive Pattern: Always wrap connections in context managers or `try...finally`:
+  ```python
+  with db_pool.get_connection() as conn:
+      with conn.cursor() as cur:
+          cur.execute("SELECT 1")
+  # Connection automatically returned to pool on block exit
+  ```
+
+---
+
+## 5. Transaction Deadlocks and Isolation Levels
+A deadlock occurs when two concurrent transactions mutually block each other, each holding a lock the other needs:
+- Transaction A locks Table 1 and requests Table 2.
+- Transaction B locks Table 2 and requests Table 1.
+- Mitigation:
+  1. Access database tables and records in a consistent, uniform order across all application endpoints.
+  2. Keep transactions short and focused; never make external HTTP API calls inside an open database transaction.
+  3. Implement retry logic for transient deadlock exceptions (`SerializationFailure` or `DeadlockDetected`).

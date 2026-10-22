@@ -28,28 +28,28 @@ class Command(BaseCommand):
             title = fname.replace('_', ' ').replace('-', ' ').title()
             title = title.replace('.Pdf', '').replace('.Txt', '')
 
-            if Document.objects.filter(title=title).exists():
+            # Check if document already exists with chunks
+            existing_doc = Document.objects.filter(title=title).first()
+            if existing_doc and existing_doc.total_chunks > 0:
                 self.stdout.write(f"Skipping existing document: {title}")
                 continue
+            elif existing_doc:
+                existing_doc.delete()
 
             try:
                 with open(fpath, 'rb') as f:
                     content_bytes = f.read()
 
-                extracted = extract_document(content_bytes, fname, len(content_bytes))
-                doc = Document.objects.create(
-                    title=title,
+                doc = pipeline.ingest_document(
+                    file_source=content_bytes,
                     filename=fname,
-                    file_type=extracted["file_type"],
-                    file_size=extracted["file_size"],
-                    total_pages=extracted["total_pages"],
-                    total_chunks=0,
+                    file_size=len(content_bytes),
                     is_sample=True
                 )
-                pipeline.index_document(doc, extracted["pages"])
                 total_new += 1
-                self.stdout.write(self.style.SUCCESS(f"Successfully indexed: {title} ({doc.total_chunks} chunks)"))
+                self.stdout.write(self.style.SUCCESS(f"Successfully indexed: {doc.title} ({doc.total_chunks} chunks)"))
             except Exception as e:
                 self.stdout.write(self.style.ERROR(f"Failed to index {fname}: {e}"))
+
 
         self.stdout.write(self.style.SUCCESS(f"Done! Knowledge Base has {Document.objects.count()} docs and {DocumentChunk.objects.count()} chunks."))

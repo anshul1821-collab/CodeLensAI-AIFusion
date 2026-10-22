@@ -1,0 +1,120 @@
+# JavaScript & TypeScript Runtime Errors, Asynchronous Pitfalls, and Best Practices
+
+## 1. TypeError: Cannot read properties of undefined / null
+One of the most frequent errors in JavaScript and TypeScript is attempting to access a property or method on a variable that evaluates to `undefined` or `null`:
+- Error Signature: `TypeError: Cannot read properties of undefined (reading 'property')` or `TypeError: Cannot read properties of null`.
+- Root Cause: Accessing nested object properties before the asynchronous response arrives, or assuming optional nested fields are always present.
+
+### Solution and Defensive Patterns:
+1. Optional Chaining Operator (`?.`):
+   ```javascript
+   // Safe navigation through potentially undefined or null objects
+   const userEmail = user?.profile?.contact?.email ?? "no-email@example.com";
+   ```
+2. Nullish Coalescing Operator (`??`):
+   Unlike logical OR (`||`), which treats `0`, `""`, and `false` as falsy, `??` only falls back when the left operand is strictly `null` or `undefined`.
+3. Early Return / Guard Clauses:
+   ```javascript
+   function processUserData(user) {
+       if (!user || !user.id) {
+           throw new Error("Invalid user record provided");
+       }
+       return user.id.toUpperCase();
+   }
+   ```
+
+---
+
+## 2. Asynchronous Programming Pitfalls: Promises & async/await
+JavaScript uses a single-threaded event loop with a call stack, microtask queue (Promises), and macrotask queue (setTimeout, I/O).
+
+### Common Asynchronous Bugs:
+1. Missing `await` keyword:
+   Forgetting `await` on an async function causes the function to return a pending `Promise` object rather than the resolved value:
+   ```javascript
+   // BUG: userPromise is a Promise object, not the user entity!
+   const user = fetchUserFromDb(userId); // Missing await
+   console.log(user.name); // undefined!
+   
+   // FIX:
+   const user = await fetchUserFromDb(userId);
+   console.log(user.name);
+   ```
+2. Unhandled Promise Rejections:
+   Always wrap asynchronous calls in `try...catch` blocks or attach `.catch()` handlers:
+   ```javascript
+   try {
+       const response = await api.getData();
+   } catch (error) {
+       logger.error("API call failed:", error);
+   }
+   ```
+3. Sequential Execution vs Parallel Execution (`Promise.all`):
+   Avoid `await` inside sequential loops if operations are independent:
+   ```javascript
+   // SLOW: Sequential network requests
+   for (const id of ids) {
+       await fetchDetails(id);
+   }
+   
+   // FAST: Parallel requests with Promise.all
+   const results = await Promise.all(ids.map(id => fetchDetails(id)));
+   ```
+
+---
+
+## 3. Strict Equality vs Loose Equality (`===` vs `==`)
+Loose equality (`==`) performs automatic type coercion, leading to counter-intuitive and dangerous bugs:
+- Examples of coercion traps:
+  `"" == 0` evaluates to `true`
+  `false == 0` evaluates to `true`
+  `null == undefined` evaluates to `true`
+  `[] == false` evaluates to `true`
+  `[1, 2] == "1,2"` evaluates to `true`
+
+### Best Practice:
+Always use strict equality (`===`) and strict inequality (`!==`), which compare both value and data type without coercion.
+
+---
+
+## 4. Variable Scoping: `var` vs `let` and `const`
+1. `var`: Function-scoped or globally scoped. Hoisted to the top of the function with value `undefined`. It does not respect block boundaries (`if`, `for`).
+2. `let` and `const`: Block-scoped. Hoisted but not initialized, residing in the "Temporal Dead Zone" (TDZ). Accessing them before declaration throws `ReferenceError`.
+3. Closure in loops bug:
+   ```javascript
+   // BUG with var: All timeouts print 3 because i is shared in function scope
+   for (var i = 0; i < 3; i++) {
+       setTimeout(() => console.log(i), 100);
+   }
+   
+   // FIX with let: Each iteration binds a new block-scoped variable i
+   for (let i = 0; i < 3; i++) {
+       setTimeout(() => console.log(i), 100); // Prints 0, 1, 2
+   }
+   ```
+
+---
+
+## 5. Object & Array Mutability: Shallow Copy vs Deep Copy
+Objects and Arrays in JavaScript are reference types. Variable assignment copies the memory reference, not the data:
+```javascript
+const original = { name: "Alice", details: { age: 30 } };
+const copy = { ...original }; // Shallow copy
+
+copy.details.age = 35;
+console.log(original.details.age); // 35! Mutated nested object!
+```
+### Solution:
+For true deep copies, use native `structuredClone(original)`:
+```javascript
+const deepCopy = structuredClone(original);
+deepCopy.details.age = 40;
+console.log(original.details.age); // 30 (unmodified)
+```
+
+---
+
+## 6. Array Methods: In-Place Mutation vs Immutability
+- Mutating methods (modify the original array in-place): `.push()`, `.pop()`, `.shift()`, `.unshift()`, `.splice()`, `.sort()`, `.reverse()`.
+- Non-mutating methods (return a new array or value): `.map()`, `.filter()`, `.slice()`, `.reduce()`, `.concat()`, `.toSorted()`.
+- Common Bug: Calling `.sort()` directly on state arrays mutates component state in frameworks like React, breaking reactivity. Always use `.slice().sort()` or `.toSorted()`.

@@ -1,0 +1,112 @@
+# C and C++ Memory Management, Segmentation Faults, and Pointer Safety
+
+## 1. Segmentation Fault (SIGSEGV): Root Causes and Analysis
+A Segmentation Fault occurs when a program attempts to access a memory address that it does not own or does not have permission to read/write:
+
+### Primary Causes of SIGSEGV:
+1. **Dereferencing a NULL or Uninitialized Pointer**:
+   ```cpp
+   int* ptr = nullptr;
+   *ptr = 42; // CRASH: SIGSEGV (attempted write to address 0x0)
+   ```
+2. **Dangling Pointer (Use-After-Free)**:
+   A pointer pointing to memory that has already been deallocated:
+   ```cpp
+   int* p = (int*)malloc(sizeof(int));
+   *p = 10;
+   free(p); // Memory returned to OS
+   
+   // BUG: Accessing p after free is undefined behavior / segmentation fault
+   printf("%d\n", *p); 
+   ```
+3. **Returning the Address of a Local Stack Variable**:
+   When a function returns, its stack frame is discarded. Returning a pointer or reference to a local variable creates an instant dangling pointer:
+   ```cpp
+   // DANGEROUS BUG:
+   int* createNumber() {
+       int localValue = 100;
+       return &localValue; // Warning: address of local variable returned
+   }
+   // Calling side accesses corrupted or overwritten stack memory!
+   
+   // FIX: Allocate on Heap or return by value
+   int createNumberSafe() {
+       return 100; // Return by value
+   }
+   ```
+
+---
+
+## 2. Buffer Overflows and Array Boundary Violations
+In C and C++, raw arrays do not perform bounds checking:
+```cpp
+int buffer[5] = {1, 2, 3, 4, 5};
+// BUG: buffer[5] writes beyond allocated bounds, corrupting adjacent stack data!
+buffer[5] = 99; // Buffer overflow / stack smashing
+```
+### Safe Modern C++ Replacement:
+Use `std::vector` or `std::array` with the `.at()` method, which performs runtime bounds checking and throws `std::out_of_range`:
+```cpp
+std::vector<int> numbers = {1, 2, 3, 4, 5};
+try {
+    int val = numbers.at(10); // Throws std::out_of_range cleanly instead of crashing
+} catch (const std::out_of_range& e) {
+    std::cerr << "Index error: " << e.what() << std::endl;
+}
+```
+
+---
+
+## 3. Memory Leaks: Manual Management vs RAII
+In C, every `malloc()` must have a corresponding `free()`.
+In C++, every `new` must have `delete`, and `new[]` must have `delete[]`.
+Forgetting to free memory leads to gradual memory exhaustion.
+
+### Modern C++ Solution: RAII and Smart Pointers (C++11+)
+Never use raw `new` and `delete` in modern C++. Use Smart Pointers from `<memory>`:
+1. `std::unique_ptr<T>`: Single-ownership smart pointer. Memory is automatically freed when the pointer goes out of scope.
+   ```cpp
+   #include <memory>
+   
+   void processResource() {
+       auto res = std::make_unique<Resource>();
+       res->doWork();
+   } // Automatically deleted here! No memory leak possible.
+   ```
+2. `std::shared_ptr<T>`: Reference-counted shared ownership.
+3. `std::weak_ptr<T>`: Non-owning observer used to break circular reference cycles in `std::shared_ptr`.
+
+---
+
+## 4. Double Free and Memory Corruption
+Calling `free()` or `delete` twice on the same pointer corrupts the memory allocator's metadata:
+```cpp
+char* buf = (char*)malloc(64);
+free(buf);
+free(buf); // CRASH: double free detected in tcache 2
+```
+### Defensive Pattern:
+Always set pointers to `nullptr` immediately after freeing:
+```cpp
+free(buf);
+buf = nullptr; // free(nullptr) is completely safe and a no-op in C/C++
+```
+
+---
+
+## 5. Virtual Destructor Requirement in Polymorphic Base Classes
+If a class is designed for inheritance and will be deleted via a pointer to its base class, the base class destructor **must** be marked `virtual`:
+```cpp
+class Base {
+public:
+    virtual ~Base() = default; // Essential! Ensures Derived destructor is invoked
+};
+
+class Derived : public Base {
+    int* data;
+public:
+    Derived() : data(new int[100]) {}
+    ~Derived() override { delete[] data; }
+};
+```
+Without `virtual ~Base()`, `delete basePtr` only invokes `Base::~Base()`, leaking all resources in `Derived`!

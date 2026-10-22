@@ -54,6 +54,67 @@ results = compute_running_averages(test_readings)`
     # Bug: Division without checking for zero visitors
     conversion_rate = (signups / total_visitors) * 100
     return f"{conversion_rate:.2f}%"`
+  },
+
+  js_undefined: {
+    language: 'javascript',
+    problem: 'TypeError: Cannot read properties of undefined (reading email) when rendering user profile.',
+    code: `function renderUserProfile(apiResponse) {
+    // Bug: apiResponse.user.profile is undefined when users haven't completed onboarding
+    const email = apiResponse.user.profile.email;
+    return \`<div class="user-card">\${email.toLowerCase()}</div>\`;
+}
+
+// Simulated incoming payload without completed profile:
+const sampleResponse = { user: { id: "u99", name: "David" } };
+renderUserProfile(sampleResponse); // Uncaught TypeError: Cannot read properties of undefined!`
+  },
+
+  java_npe_string: {
+    language: 'java',
+    problem: 'Authentication check throws NullPointerException or returns false due to reference equality on Strings.',
+    code: `public class AuthenticationService {
+    public boolean verifyUserStatus(String inputStatus) {
+        // Bug 1: Using == instead of .equals() compares memory addresses, not String content!
+        if (inputStatus == "ACTIVE") {
+            return true;
+        }
+        
+        // Bug 2: inputStatus.equals() throws NullPointerException if inputStatus is null!
+        return inputStatus.equals("VERIFIED");
+    }
+}`
+  },
+
+  cpp_segfault: {
+    language: 'cpp',
+    problem: 'Segmentation fault (SIGSEGV) and memory corruption when processing employee ID records.',
+    code: `#include <iostream>
+
+int* generateEmployeeId() {
+    // Bug: Returning the address of a local stack variable!
+    // Memory is deallocated as soon as generateEmployeeId() returns.
+    int tempId = 4096;
+    return &tempId; // Warning: address of local variable 'tempId' returned
+}
+
+void processRecords() {
+    int* idPtr = generateEmployeeId();
+    // Crashes with Segmentation Fault or reads corrupted stack memory!
+    std::cout << "Employee ID: " << *idPtr << std::endl;
+}`
+  },
+
+  sql_injection: {
+    language: 'sql',
+    problem: 'Vulnerable dynamic query concatenation and NULL comparison evaluating to UNKNOWN.',
+    code: `-- Bug 1: Comparing with NULL using '=' returns UNKNOWN (evaluates to false in WHERE clauses)
+SELECT account_id, balance, email 
+FROM accounts 
+WHERE email = NULL; -- Returns 0 rows! Must use IS NULL.
+
+-- Bug 2: Vulnerable dynamic SQL string concatenation
+-- query = "SELECT * FROM users WHERE user_id = '" + user_input + "'";`
   }
 };
 

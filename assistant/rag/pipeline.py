@@ -14,34 +14,89 @@ from assistant.rag.generator import ContextGroundedGenerator
 def create_retrieval_query(language: str, code: str, problem_description: str) -> str:
     """
     Constructs an optimized semantic search query by extracting problem context
-    and salient keywords (function signatures, default parameters, data types, errors).
+    and salient keywords (function signatures, default parameters, data types, errors)
+    across all supported programming languages (Python, JavaScript, Java, C/C++, SQL).
     """
     query_parts = []
     
     if problem_description.strip():
         query_parts.append(problem_description.strip())
 
-    # Extract function definitions
-    fn_defs = re.findall(r'def\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)', code)
-    for fn_name, params in fn_defs:
-        query_parts.append(f"function {fn_name} parameter {params}")
-        if "=" in params:
-            query_parts.append("default argument value parameter evaluation")
+    lang_lower = (language or "").lower()
 
-    # Extract common error patterns
-    if "[]" in code or "{}" in code:
-        query_parts.append("mutable default argument list dictionary parameter")
-    if "range(" in code:
-        query_parts.append("range len sequence index out of range bounds indexerror")
-    if "except" in code:
-        query_parts.append("exception handling try except runtime error")
+    # --- Python Specific Patterns ---
+    if lang_lower in ("python", "py"):
+        fn_defs = re.findall(r'def\s+([a-zA-Z0-9_]+)\s*\(([^)]*)\)', code)
+        for fn_name, params in fn_defs:
+            query_parts.append(f"function {fn_name} parameter {params}")
+            if "=" in params:
+                query_parts.append("default argument value parameter evaluation")
+        if "[]" in code or "{}" in code:
+            query_parts.append("mutable default argument list dictionary parameter")
+        if "range(" in code:
+            query_parts.append("range len sequence index out of range bounds indexerror")
+        if "except" in code:
+            query_parts.append("exception handling try except runtime error")
+
+    # --- JavaScript / TypeScript Specific Patterns ---
+    elif lang_lower in ("javascript", "typescript", "js", "ts"):
+        if "undefined" in code or "null" in code or "?." in code:
+            query_parts.append("TypeError Cannot read properties of undefined null optional chaining")
+        if "async" in code or "await" in code or "Promise" in code:
+            query_parts.append("async await Promise unhandled rejection asynchronous event loop")
+        if "var " in code or "let " in code or "const " in code:
+            query_parts.append("scoping temporal dead zone hoisting closure var let const")
+        if "==" in code:
+            query_parts.append("equality type coercion loose equality strict equality")
+        if ".sort(" in code or ".splice(" in code or ".map(" in code:
+            query_parts.append("array mutability shallow copy deep copy structuredClone")
+
+    # --- Java Specific Patterns ---
+    elif lang_lower == "java":
+        if "null" in code or "Optional" in code:
+            query_parts.append("NullPointerException NPE null reference Optional defensive check")
+        if "==" in code and ("String" in code or '"' in code):
+            query_parts.append("String comparison equals string pool memory reference")
+        if "ConcurrentModificationException" in code or ".remove(" in code:
+            query_parts.append("ConcurrentModificationException collection iteration iterator remove")
+        if "try (" in code or "Connection" in code or "Stream" in code:
+            query_parts.append("try-with-resources AutoCloseable resource leak connection pool")
+        if "[]" in code or "length" in code:
+            query_parts.append("ArrayIndexOutOfBoundsException array index zero-based bounds")
+
+    # --- C / C++ Specific Patterns ---
+    elif lang_lower in ("cpp", "c", "c++"):
+        if "*" in code or "->" in code or "nullptr" in code or "NULL" in code:
+            query_parts.append("Segmentation fault SIGSEGV pointer dereference dangling wild pointer")
+        if "malloc" in code or "free" in code or "new" in code or "delete" in code:
+            query_parts.append("memory leak double free use after free smart pointer unique_ptr RAII")
+        if "char[" in code or "strcpy" in code or "buffer" in code:
+            query_parts.append("buffer overflow stack smashing array bounds bounds violation")
+        if "virtual" in code or "destructor" in code or "~" in code:
+            query_parts.append("virtual destructor polymorphic base class memory leak slicing")
+
+    # --- SQL / Database Specific Patterns ---
+    elif lang_lower in ("sql", "database"):
+        if "SELECT" in code.upper() or "WHERE" in code.upper():
+            query_parts.append("SQL query execution injection parameterized query prepared statement")
+        if "NULL" in code.upper():
+            query_parts.append("IS NULL three-valued logic UNKNOWN COALESCE")
+        if "JOIN" in code.upper() or "all()" in code:
+            query_parts.append("N+1 query problem select_related prefetch_related eager loading")
+        if "TRANSACTION" in code.upper() or "commit" in code.lower():
+            query_parts.append("transaction deadlock ACID isolation connection pool exhaustion")
+
+    # Universal error indicators
     if "/" in code:
         query_parts.append("zerodivisionerror division by zero")
+    if "index" in problem_description.lower() or "bounds" in problem_description.lower():
+        query_parts.append("index bounds off-by-one boundary checking")
 
     # Include language tag
-    query_parts.append(f"{language} programming documentation")
+    query_parts.append(f"{language} programming documentation error handling")
 
     return " ".join(query_parts)
+
 
 
 class RAGPipeline:
