@@ -78,6 +78,7 @@ class ContextGroundedGenerator:
                     llm_result["grounding_message"] = ""
                     llm_result["retrieved_sources"] = retrieved_sources
                     llm_result["model_used"] = "Google Gemini 2.5 Flash (Grounded RAG)"
+                    llm_result["validation_notice"] = "Analyzed statically. Untrusted code is never executed."
                     return llm_result
             except Exception as e:
                 # Log or fallback to static analyzer
@@ -444,7 +445,89 @@ Please respond in this exact JSON schema:
                         )
                         break
 
+        # 4. Check for undefined variables (NameError)
+        if not issues:
+            import builtins
+            try:
+                tree = ast.parse(code)
+                builtin_names = set(dir(builtins))
+                builtin_names.update(['__name__', '__file__', '__doc__', '__package__', '__spec__', 'True', 'False', 'None'])
+                defined_names = set()
+                used_names = []
+
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+                        defined_names.add(node.id)
+                    elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        defined_names.add(node.name)
+                        for arg in node.args.args + node.args.kwonlyargs:
+                            defined_names.add(arg.arg)
+                        if node.args.vararg:
+                            defined_names.add(node.args.vararg.arg)
+                        if node.args.kwarg:
+                            defined_names.add(node.args.kwarg.arg)
+                    elif isinstance(node, ast.ClassDef):
+                        defined_names.add(node.name)
+                    elif isinstance(node, ast.Import):
+                        for alias in node.names:
+                            defined_names.add(alias.asname or alias.name.split('.')[0])
+                    elif isinstance(node, ast.ImportFrom):
+                        for alias in node.names:
+                            defined_names.add(alias.asname or alias.name)
+                    elif isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+                        used_names.append((node.id, getattr(node, 'lineno', 1)))
+
+                undefined_vars = []
+                for var_name, lineno in used_names:
+                    if var_name not in builtin_names and var_name not in defined_names:
+                        if var_name not in [u[0] for u in undefined_vars]:
+                            undefined_vars.append((var_name, lineno))
+
+                if undefined_vars:
+                    primary_var, line_num = undefined_vars[0]
+                    var_list_str = ", ".join(f"`{v[0]}`" for v in undefined_vars)
+                    cites = find_citation_for_keywords(["nameerror", "variable", "scope", "runtime errors", "exceptions"])
+                    
+                    line_excerpt = lines[line_num - 1].strip() if line_num <= len(lines) else code.strip()
+
+                    issues.append({
+                        "title": f"NameError: Undefined Variable '{primary_var}'",
+                        "severity": "Critical",
+                        "line_number": f"Line {line_num}",
+                        "code_excerpt": line_excerpt,
+                        "explanation": (
+                            f"The variable `{primary_var}` is referenced on line {line_num}, but it was never defined, "
+                            f"assigned a value, or imported anywhere in this code. In Python, variables must be defined before use."
+                        ),
+                        "why_it_occurs": (
+                            f"Python searches for names through the LEGB scope hierarchy (Local, Enclosing, Global, Built-in). "
+                            f"Because `{primary_var}` does not exist in any scope, Python raises a runtime `NameError: name '{primary_var}' is not defined`."
+                        ),
+                        "cited_sources": cites
+                    })
+
+                    # If code is print(primary_var), offer both variable definition and literal string fix
+                    if re.search(rf'print\s*\(\s*{re.escape(primary_var)}\s*\)', code):
+                        fix_desc = (
+                            f"Define and initialize `{primary_var}` before printing it (e.g., `{primary_var} = \"Alice\"`), "
+                            f"or wrap it in quotes if you intended to print literal text: `print(\"{primary_var}\")`."
+                        )
+                        corrected = (
+                            f'# Option 1: Define `{primary_var}` before using it:\n'
+                            f'{primary_var} = "Alice"\n'
+                            f'{code}\n\n'
+                            f'# Option 2: If you intended to print literal text, wrap in quotes:\n'
+                            f'# print("{primary_var}")'
+                        )
+                    else:
+                        defs = "\n".join(f'{v[0]} = "sample_value"' for v in undefined_vars)
+                        fix_desc = f"Define and assign values to {var_list_str} before reading them."
+                        corrected = f"{defs}\n{code}"
+            except Exception:
+                pass
+
         return issues, corrected, fix_desc
+
 
     def _analyze_javascript(
         self,
