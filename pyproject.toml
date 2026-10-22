@@ -1,0 +1,5 @@
+[tool.vercel]
+entrypoint = "codelens_project.wsgi:application"
+
+[tool.vercel.scripts]
+build = "python manage.py collectstatic --noinput"

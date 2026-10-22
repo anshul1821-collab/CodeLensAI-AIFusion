@@ -42,6 +42,16 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.vercel.app',
+    'https://*.now.sh',
+    'http://127.0.0.1',
+    'http://localhost',
+]
+custom_csrf = os.environ.get('CSRF_TRUSTED_ORIGINS')
+if custom_csrf:
+    CSRF_TRUSTED_ORIGINS.extend([origin.strip() for origin in custom_csrf.split(',') if origin.strip()])
+
 
 # Application definition
 
@@ -57,6 +67,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -64,6 +75,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
 
 ROOT_URLCONF = 'codelens_project.urls'
 
@@ -88,12 +100,22 @@ WSGI_APPLICATION = 'codelens_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
+is_serverless = bool(os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
 sqlite_path_env = os.environ.get('SQLITE_PATH')
+
 if sqlite_path_env:
     db_file_path = Path(sqlite_path_env)
-elif os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'):
+elif is_serverless:
     # Serverless environments (Vercel, AWS Lambda) have read-only root filesystems; only /tmp is writable
     db_file_path = Path('/tmp') / 'db.sqlite3'
+    # Auto-populate /tmp/db.sqlite3 from bundled pre-migrated seed_db.sqlite3 on container boot
+    seed_db_path = BASE_DIR / 'codelens_project' / 'seed_db.sqlite3'
+    if not db_file_path.exists() and seed_db_path.exists():
+        import shutil
+        try:
+            shutil.copyfile(seed_db_path, db_file_path)
+        except Exception:
+            pass
 else:
     db_file_path = BASE_DIR / 'db.sqlite3'
 
@@ -102,6 +124,7 @@ try:
     db_file_path.parent.mkdir(parents=True, exist_ok=True)
 except Exception:
     pass
+
 
 DATABASES = {
     'default': {
