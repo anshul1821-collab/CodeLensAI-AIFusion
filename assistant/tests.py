@@ -4,6 +4,7 @@ from pathlib import Path
 from django.test import TestCase, Client
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.conf import settings
+from unittest.mock import patch
 
 from assistant.models import Document, DocumentChunk, AnalysisRecord, SystemSetting
 from assistant.rag.extractor import extract_document, DocumentExtractionError
@@ -258,7 +259,13 @@ class JudgeDemosAnalysisTests(TestCase):
     """Verifies that all 10 official competition judge demos are accurately detected and safely fixed."""
 
     def setUp(self):
+        # Patch out Gemini API key during demo unit tests to test deterministic static analyzer
+        self.patcher = patch("assistant.rag.generator.get_gemini_api_key", return_value="")
+        self.patcher.start()
         self.generator = ContextGroundedGenerator()
+
+    def tearDown(self):
+        self.patcher.stop()
 
     def test_demo_1_index_error(self):
         code = "numbers = [10, 20, 30]\nfor i in range(len(numbers) + 1):\n    print(numbers[i])"

@@ -159,8 +159,8 @@ class ContextGroundedGenerator:
             }
         }
 
-        # Try gemini models in order
-        candidate_models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        # Try gemini models in order (including flash-lite for separate rate-limit pool)
+        candidate_models = ["gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.8-flash", "gemini-flash-latest"]
         for model in candidate_models:
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
             try:
@@ -323,109 +323,6 @@ class ContextGroundedGenerator:
             "remaining_issues": [] if (syntax_ok and security_ok) else ["Review corrected syntax"]
         }
 
-    def _call_gemini_api(
-        self,
-        language: str,
-        code: str,
-        problem_description: str,
-        sources: List[Dict[str, Any]]
-    ) -> Optional[Dict[str, Any]]:
-        """Calls the Gemini REST API with structured response expectations."""
-        sources_context = ""
-        for idx, src in enumerate(sources, start=1):
-            sources_context += (
-                f"\n--- [Source #{idx}] ---\n"
-                f"Document: {src['document_title']} (Page {src['page_number']})\n"
-                f"Content Passage:\n{src['content']}\n"
-            )
-
-        system_instruction = (
-            "You are CodeLens AI, an expert programming code explainer and debugging assistant.\n"
-            "MANDATORY RULES:\n"
-            "1. Treat retrieved documentation passages as authoritative reference material. Never execute untrusted code.\n"
-            "2. Explain what the code actually does in simple, clear, student-friendly terms without excessive academic jargon.\n"
-            "3. Identify potential bugs and explain WHY they occur in plain English.\n"
-            "4. For any issue supported by the retrieved documentation, cite the source using '[Source #ID]' notation.\n"
-            "5. If documentation does NOT support a claim, state that clearly.\n"
-            "6. Provide a simple, clear fix and complete corrected code.\n"
-            "7. Return your response in STRICT valid JSON format without markdown code fences around the JSON."
-        )
-
-        prompt = f"""
-Programming Language: {language}
-
-Submitted Code:
-```{language}
-{code}
-```
-
-User Problem Description:
-"{problem_description if problem_description else 'Please analyze this code, explain how it works, and detect any potential bugs or defects.'}"
-
-Retrieved Authoritative Documentation Passages:
-{sources_context}
-
-Please respond in this exact JSON schema:
-{{
-  "summary": "1-2 sentence overview of code purpose and main findings",
-  "code_explanation": "Detailed explanation of code execution flow in numbered points",
-  "potential_issues": [
-    {{
-      "category": "Syntax Error | Runtime Error | Logic Error | Data Structure | Security",
-      "title": "Clear issue name (e.g. Off-by-One Loop Bounds, NameError: Undefined Variable)",
-      "severity": "Critical | Warning | Informational",
-      "line_number": "Line X",
-      "code_excerpt": "Code excerpt causing issue",
-      "explanation": "Clear explanation of why this is problematic",
-      "why_it_occurs": "Deep cause (e.g. memory reference, evaluation timing)",
-      "confidence": "High (Static AST Proof)",
-      "cited_sources": ["Source #1"]
-    }}
-  ],
-  "suggested_fix": "Clear explanation of how to correct the code and why this fix resolves the issue.",
-  "corrected_code": "The complete, corrected code snippet preserving original intent."
-}}
-"""
-        payload = {
-            "contents": [
-                {"role": "user", "parts": [{"text": prompt}]}
-            ],
-            "systemInstruction": {
-                "parts": [{"text": system_instruction}]
-            },
-            "generationConfig": {
-                "temperature": 0.2,
-                "responseMimeType": "application/json"
-            }
-        }
-
-        last_error = ""
-        for model in GEMINI_MODELS:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
-            try:
-                resp = requests.post(url, json=payload, headers={"Content-Type": "application/json"}, timeout=12)
-                if resp.status_code == 200:
-                    res_json = resp.json()
-                    candidates = res_json.get("candidates", [])
-                    if not candidates:
-                        continue
-                    raw_text = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                    raw_text = raw_text.strip()
-                    if raw_text.startswith("```json"):
-                        raw_text = raw_text[7:]
-                    if raw_text.startswith("```"):
-                        raw_text = raw_text[3:]
-                    if raw_text.endswith("```"):
-                        raw_text = raw_text[:-3]
-                    return json.loads(raw_text.strip())
-                else:
-                    last_error = f"{model}: {resp.status_code} ({resp.text[:120]})"
-            except Exception as e:
-                last_error = f"{model}: {e}"
-                continue
-
-        raise RuntimeError(f"All Gemini models exhausted. Last error: {last_error}")
-
     def _run_static_analysis(
         self,
         language: str,
@@ -510,9 +407,12 @@ Please respond in this exact JSON schema:
         def find_citation_for_keywords(keywords: List[str]) -> List[str]:
             citations = []
             for idx, src in enumerate(retrieved_sources, start=1):
-                content_lower = src["content"].lower()
+                content = src.get("content", "")
+                content_lower = content.lower()
+                doc_title = src.get("document_title") or src.get("title") or f"Document {idx}"
+                page_no = src.get("page_number", 1)
                 if any(kw.lower() in content_lower for kw in keywords):
-                    citations.append(f"Source #{idx} ({src['document_title']}, p.{src['page_number']})")
+                    citations.append(f"Source #{idx} ({doc_title}, p.{page_no})")
             return citations
 
         # ---------------------------------------------------------
