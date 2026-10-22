@@ -8,8 +8,8 @@ import requests
 from django.conf import settings
 
 LOCAL_VECTOR_DIM = 512
-GEMINI_EMBED_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent"
-FALLBACK_EMBED_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-2:embedContent"
+GEMINI_EMBED_URL = "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent"
+FALLBACK_EMBED_URL = "https://generativelanguage.googleapis.com/v1beta/models/embedding-001:embedContent"
 
 
 def l2_normalize(vector: List[float]) -> List[float]:
@@ -124,7 +124,7 @@ class GoogleGeminiEmbedder(BaseEmbedder):
     Google Gemini embedding integration via direct REST API.
     Zero C++ build dependencies, high semantic retrieval precision.
     """
-    model_name = "models/gemini-embedding-001"
+    model_name = "models/text-embedding-004"
     dimension = 768
 
     def __init__(self, api_key: str):
@@ -139,7 +139,7 @@ class GoogleGeminiEmbedder(BaseEmbedder):
 
         url = f"{GEMINI_EMBED_URL}?key={self.api_key}"
         payload = {
-            "model": "models/gemini-embedding-001",
+            "model": "models/text-embedding-004",
             "content": {
                 "parts": [{"text": text[:2000]}]
             },
@@ -150,10 +150,10 @@ class GoogleGeminiEmbedder(BaseEmbedder):
         try:
             resp = requests.post(url, headers=headers, json=payload, timeout=12)
             if resp.status_code != 200:
-                # Try fallback model: gemini-embedding-2
+                # Try fallback model: models/embedding-001
                 fallback_url = f"{FALLBACK_EMBED_URL}?key={self.api_key}"
                 fallback_payload = {
-                    "model": "models/gemini-embedding-2",
+                    "model": "models/embedding-001",
                     "content": {"parts": [{"text": text[:2000]}]},
                     "outputDimensionality": 768
                 }

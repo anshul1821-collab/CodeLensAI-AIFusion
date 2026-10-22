@@ -1072,16 +1072,22 @@ async function saveSettings() {
 
     const data = await resp.json();
     if (data.success) {
-      if (statusEl) statusEl.innerHTML = `<span class="text-success small"><i class="bi bi-check-circle me-1"></i>Settings saved! Active embedder: ${escapeHtml(data.active_embedder)}</span>`;
-      setTimeout(() => {
-        const modal = bootstrap.Modal.getInstance(document.getElementById('settingsModal'));
-        if (modal) modal.hide();
-      }, 1200);
+      if (data.valid) {
+        if (statusEl) statusEl.innerHTML = `<div class="alert alert-success py-2 px-3 small mt-2 mb-0"><i class="bi bi-check-circle-fill me-1"></i>${escapeHtml(data.message)}<br><span class="text-dim">Active Embedder: ${escapeHtml(data.active_embedder)}</span></div>`;
+        setTimeout(() => {
+          const modalEl = document.getElementById('settingsModal');
+          const modal = bootstrap.Modal.getInstance(modalEl);
+          if (modal) modal.hide();
+        }, 1500);
+      } else {
+        if (statusEl) statusEl.innerHTML = `<div class="alert alert-warning py-2 px-3 small mt-2 mb-0"><i class="bi bi-exclamation-triangle-fill me-1"></i>${escapeHtml(data.message)}</div>`;
+      }
+      refreshStatus();
     } else {
-      if (statusEl) statusEl.innerHTML = `<span class="text-danger small">${escapeHtml(data.error)}</span>`;
+      if (statusEl) statusEl.innerHTML = `<div class="alert alert-danger py-2 px-3 small mt-2 mb-0">${escapeHtml(data.error || 'Failed to update settings.')}</div>`;
     }
   } catch (err) {
-    if (statusEl) statusEl.innerHTML = `<span class="text-danger small">Error: ${escapeHtml(err.message)}</span>`;
+    if (statusEl) statusEl.innerHTML = `<div class="alert alert-danger py-2 px-3 small mt-2 mb-0">Network error: ${escapeHtml(err.message)}</div>`;
   }
 }
 

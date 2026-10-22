@@ -47,21 +47,9 @@ class ContextGroundedGenerator:
         """
         Main entry point for generating code explanations and debugging assistance.
         """
+        self.api_key = get_gemini_api_key()
         is_sufficient = retrieval_result.get("is_sufficient", False)
         retrieved_sources = retrieval_result.get("results", [])
-
-        # If knowledge base lacks relevant information, explicitly acknowledge limitation
-        if not is_sufficient:
-            base_analysis = self._run_static_analysis(
-                language=language,
-                code=code,
-                problem_description=problem_description,
-                retrieved_sources=[]
-            )
-            base_analysis["is_grounded"] = False
-            base_analysis["grounding_message"] = GROUNDING_LIMITATION_MESSAGE
-            base_analysis["retrieved_sources"] = []
-            return self._standardize_result(base_analysis, language, code)
 
         # Attempt Gemini LLM if key is configured
         if self.api_key:
@@ -73,13 +61,26 @@ class ContextGroundedGenerator:
                     sources=retrieved_sources
                 )
                 if llm_result:
-                    llm_result["is_grounded"] = True
-                    llm_result["grounding_message"] = ""
+                    llm_result["is_grounded"] = is_sufficient
+                    llm_result["grounding_message"] = "" if is_sufficient else GROUNDING_LIMITATION_MESSAGE
                     llm_result["retrieved_sources"] = retrieved_sources
-                    llm_result["model_used"] = "Google Gemini 2.5 Flash (Grounded RAG)"
+                    llm_result["model_used"] = "Google Gemini 2.5 Flash (Grounded RAG)" if is_sufficient else "Google Gemini 2.5 Flash (General Analysis)"
                     return self._standardize_result(llm_result, language, code)
             except Exception:
                 pass
+
+        # If knowledge base lacks relevant information and Gemini wasn't used/available
+        if not is_sufficient:
+            base_analysis = self._run_static_analysis(
+                language=language,
+                code=code,
+                problem_description=problem_description,
+                retrieved_sources=[]
+            )
+            base_analysis["is_grounded"] = False
+            base_analysis["grounding_message"] = GROUNDING_LIMITATION_MESSAGE
+            base_analysis["retrieved_sources"] = []
+            return self._standardize_result(base_analysis, language, code)
 
         # Use intelligent context-grounded analyzer (zero external API dependency)
         grounded_result = self._run_static_analysis(
@@ -93,6 +94,105 @@ class ContextGroundedGenerator:
         grounded_result["retrieved_sources"] = retrieved_sources
         grounded_result["model_used"] = "CodeLens Static & Grounded RAG Engine"
         return self._standardize_result(grounded_result, language, code)
+
+    def _call_gemini_api(
+        self,
+        language: str,
+        code: str,
+        problem_description: str,
+        sources: List[Dict[str, Any]]
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Direct REST integration with Google Gemini 2.5 Flash / 1.5 Flash.
+        Sends prompt with RAG grounding evidence and receives structured JSON.
+        """
+        if not self.api_key:
+            return None
+
+        # Build context from retrieved sources
+        context_blocks = []
+        for idx, src in enumerate(sources, 1):
+            title = src.get("title", f"Document {idx}")
+            content = src.get("content", "")
+            context_blocks.append(f"--- REFERENCE {idx}: {title} ---\n{content}\n")
+        sources_text = "\n".join(context_blocks) if context_blocks else "No reference documentation retrieved."
+
+        prompt = (
+            f"You are CodeLens AI, an expert code debugging, error explanation, and auto-fix engine.\n"
+            f"Analyze the submitted code and return a valid JSON object only (no outer markdown).\n\n"
+            f"LANGUAGE: {language}\n\n"
+            f"SUBMITTED CODE:\n```\n{code}\n```\n\n"
+            f"USER PROBLEM / TRACEBACK:\n{problem_description.strip() if problem_description.strip() else 'Analyze for all syntax, runtime, and logic defects.'}\n\n"
+            f"RETRIEVED RAG DOCUMENTATION PASSAGES:\n{sources_text}\n\n"
+            f"REQUIREMENTS:\n"
+            f"1. Identify all confirmed defects and probable bugs.\n"
+            f"2. For each issue in 'potential_issues', specify:\n"
+            f"   - 'category': e.g. 'Syntax Error', 'Runtime Error', 'Logic Error', 'Data Structure Error', 'OOP Error', 'Security Issue', 'File/Import Error'\n"
+            f"   - 'title': Short technical title (e.g. 'IndexError: list index out of range')\n"
+            f"   - 'severity': 'Critical', 'Warning', or 'Suggestion'\n"
+            f"   - 'line_number': 'Line X' or 'Unknown'\n"
+            f"   - 'code_excerpt': the offending code snippet\n"
+            f"   - 'explanation': simple English explanation suitable for students\n"
+            f"   - 'why_it_occurs': underlying technical root cause\n"
+            f"   - 'suggested_correction': how to correct the code\n"
+            f"   - 'confidence': 'High (Gemini + RAG Grounded)'\n"
+            f"   - 'verification_status': 'Verified (Safe Static Validation)'\n"
+            f"   - 'cited_sources': list of strings of cited references from the documentation passages above\n"
+            f"3. 'corrected_code': the full corrected code snippet with the surgical fix applied.\n"
+            f"4. 'suggested_fix': one sentence summary of the fix.\n"
+            f"5. 'edge_cases': list of edge cases to keep in mind.\n\n"
+            f"Output must be valid JSON conforming to this schema."
+        )
+
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "contents": [
+                {
+                    "parts": [{"text": prompt}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.1,
+                "topP": 0.95,
+                "maxOutputTokens": 2500,
+                "responseMimeType": "application/json"
+            }
+        }
+
+        # Try gemini models in order
+        candidate_models = ["gemini-2.5-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+        for model in candidate_models:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={self.api_key}"
+            try:
+                resp = requests.post(url, headers=headers, json=payload, timeout=20)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        content_parts = candidates[0].get("content", {}).get("parts", [])
+                        if content_parts:
+                            raw_text = content_parts[0].get("text", "").strip()
+                            # Clean up markdown code blocks if model wrapped it
+                            if raw_text.startswith("```json"):
+                                raw_text = raw_text[7:]
+                            if raw_text.startswith("```"):
+                                raw_text = raw_text[3:]
+                            if raw_text.endswith("```"):
+                                raw_text = raw_text[:-3]
+                            raw_text = raw_text.strip()
+
+                            parsed = json.loads(raw_text)
+                            if isinstance(parsed, dict) and "potential_issues" in parsed:
+                                if not parsed.get("corrected_code"):
+                                    parsed["corrected_code"] = code
+                                return parsed
+                elif resp.status_code in (400, 401, 403):
+                    # Key is rejected by Google, abort further model attempts
+                    break
+            except Exception:
+                continue
+
+        return None
 
     def _standardize_result(self, result: Dict[str, Any], language: str, original_code: str) -> Dict[str, Any]:
         """

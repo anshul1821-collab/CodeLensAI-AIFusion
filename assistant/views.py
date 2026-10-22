@@ -176,17 +176,39 @@ def api_update_settings(request):
     gemini_key = data.get("gemini_api_key", "").strip()
     embedder_pref = data.get("embedder_preference", "auto").strip()
 
-    if gemini_key:
-        SystemSetting.set_setting("GEMINI_API_KEY", gemini_key)
-    SystemSetting.set_setting("EMBEDDER_PREFERENCE", embedder_pref)
+    tested_valid = True
+    test_msg = "Settings updated successfully."
 
+    if gemini_key:
+        try:
+            test_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={gemini_key}"
+            t_resp = requests.get(test_url, timeout=5)
+            if t_resp.status_code == 200:
+                tested_valid = True
+                test_msg = "Gemini API key verified successfully! Connected to Google AI Studio."
+                SystemSetting.set_setting("GEMINI_API_KEY", gemini_key)
+            else:
+                tested_valid = False
+                test_msg = f"API key saved, but Google returned HTTP {t_resp.status_code}. Ensure it is an AI Studio key from https://aistudio.google.com/."
+                SystemSetting.set_setting("GEMINI_API_KEY", gemini_key)
+        except Exception as e:
+            tested_valid = False
+            test_msg = f"Could not reach Google API: {str(e)}"
+            SystemSetting.set_setting("GEMINI_API_KEY", gemini_key)
+    elif "gemini_api_key" in data:
+        SystemSetting.set_setting("GEMINI_API_KEY", "")
+        test_msg = "Gemini key cleared. Running in 100% offline local AST & semantic mode."
+
+    SystemSetting.set_setting("EMBEDDER_PREFERENCE", embedder_pref)
     embedder = get_active_embedder()
+    active_key = SystemSetting.get_setting("GEMINI_API_KEY", "") or os.environ.get("GEMINI_API_KEY", "")
 
     return JsonResponse({
         "success": True,
-        "message": "Settings updated successfully.",
+        "valid": tested_valid,
+        "message": test_msg,
         "active_embedder": embedder.model_name,
-        "has_gemini": bool(gemini_key)
+        "has_gemini": bool(active_key.strip())
     })
 
 
