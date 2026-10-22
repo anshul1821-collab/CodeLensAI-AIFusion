@@ -35,12 +35,22 @@ except Exception:
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-#)vvcm5_utp2#znk4cs#7-j_$g6pda70)7^vfq*rf_)fr$89zu'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-#)vvcm5_utp2#znk4cs#7-j_$g6pda70)7^vfq*rf_)fr$89zu')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = ['*']
+is_serverless = bool(os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
+allowed_hosts_env = os.environ.get('ALLOWED_HOSTS')
+if allowed_hosts_env:
+    ALLOWED_HOSTS = [h.strip() for h in allowed_hosts_env.split(',') if h.strip()]
+else:
+    ALLOWED_HOSTS = ['*'] if (DEBUG or is_serverless) else ['127.0.0.1', 'localhost']
+
+if 'testserver' not in ALLOWED_HOSTS and '*' not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append('testserver')
+
+
 
 CSRF_TRUSTED_ORIGINS = [
     'https://*.vercel.app',
@@ -100,7 +110,6 @@ WSGI_APPLICATION = 'codelens_project.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-is_serverless = bool(os.environ.get('VERCEL') or os.environ.get('AWS_LAMBDA_FUNCTION_NAME'))
 sqlite_path_env = os.environ.get('SQLITE_PATH')
 
 if sqlite_path_env:
@@ -125,30 +134,33 @@ try:
 except Exception:
     pass
 
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': db_file_path,
-    }
-}
-
-# Optional external PostgreSQL via DATABASE_URL if configured
 database_url = os.environ.get('DATABASE_URL')
 if database_url and database_url.startswith(('postgres://', 'postgresql://')):
     try:
-        from urllib.parse import urlparse
-        url = urlparse(database_url)
-        DATABASES['default'] = {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': url.path.lstrip('/'),
-            'USER': url.username,
-            'PASSWORD': url.password,
-            'HOST': url.hostname,
-            'PORT': url.port or 5432,
+        import dj_database_url
+        DATABASES = {
+            'default': dj_database_url.config(
+                default=database_url,
+                conn_max_age=600,
+                conn_health_checks=True,
+                ssl_require=True
+            )
         }
     except Exception:
-        pass
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.sqlite3',
+                'NAME': db_file_path,
+            }
+        }
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': db_file_path,
+        }
+    }
+
 
 
 
@@ -210,3 +222,11 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+
+SILENCED_SYSTEM_CHECKS = ['mail.E001']
+
+if not DEBUG:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+

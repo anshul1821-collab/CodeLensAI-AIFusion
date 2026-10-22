@@ -11,5 +11,8 @@ urlpatterns = [
     path('api/documents/load-samples/', views.api_load_samples, name='api_load_samples'),
     path('api/settings/', views.api_update_settings, name='api_update_settings'),
     path('api/status/', views.api_get_status, name='api_status'),
+    path('api/history/', views.api_get_history, name='api_history'),
+    path('api/demos/', views.api_get_demos, name='api_demos'),
+    path('api/verify/', views.api_verify_code, name='api_verify'),
     path('api/search-preview/', views.api_search_preview, name='api_search_preview'),
 ]

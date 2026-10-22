@@ -552,3 +552,151 @@ body {
   font-size: 0.92rem;
   background: #090e1a;
 }
+
+/* ========================================================
+   SUMMARY METRIC CARDS & VERIFICATION PANEL STYLES
+   ======================================================== */
+.summary-cards-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.2rem;
+}
+
+.summary-card-metric {
+  background: #0f182c;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 0.85rem 1rem;
+  text-align: center;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.summary-card-metric:hover {
+  transform: translateY(-2px);
+  border-color: #4f6485;
+}
+
+.metric-num {
+  font-size: 1.65rem;
+  font-weight: 800;
+  line-height: 1.2;
+  font-family: var(--font-mono);
+}
+
+.metric-label {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  color: var(--text-dim);
+  margin-top: 0.2rem;
+}
+
+/* Verification Panel */
+.verification-box {
+  background: #0c1424;
+  border: 1px solid #233552;
+  border-radius: 10px;
+  padding: 1.1rem;
+  margin-bottom: 1.2rem;
+}
+
+.verification-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.6rem;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+  margin-bottom: 0.45rem;
+}
+
+.verif-badge-pass {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  padding: 0.2rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.verif-badge-skip {
+  background: rgba(148, 163, 184, 0.12);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  padding: 0.2rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.verif-badge-warn {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  padding: 0.2rem 0.65rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+/* Side-by-Side Diff Comparison */
+.diff-comparison-box {
+  background: #090e1a;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-top: 0.75rem;
+}
+
+.diff-header {
+  background: #0e1629;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.diff-pane-code {
+  font-family: var(--font-mono);
+  font-size: 0.88rem;
+  padding: 0.85rem;
+  margin: 0;
+  white-space: pre-wrap;
+  background: #080c16;
+  color: #e2e8f0;
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+/* Demo Grid in Modal / Dashboard */
+.demo-card-item {
+  background: #0f182c;
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 1rem;
+  transition: all 0.2s ease;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.demo-card-item:hover {
+  border-color: #818cf8;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4);
+}
+
+.demo-num-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  background: rgba(99, 102, 241, 0.2);
+  color: #a5b4fc;
+  padding: 0.15rem 0.5rem;
+  border-radius: 4px;
+}
+
